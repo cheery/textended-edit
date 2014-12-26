@@ -65,7 +65,7 @@ class Node(object):
         if isinstance(contents, list):
             for node in contents:
                 node.parent = None
-        return text
+        return contents
 
     def yank(self, start, stop):
         contents = self.contents[start:stop]

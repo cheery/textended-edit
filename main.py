@@ -27,6 +27,7 @@ class Selection(object):
         self.subj = subj
         self.head = head
         self.tail = tail
+        self.x_anchor = None
 
     @property
     def start(self):
@@ -59,6 +60,7 @@ class Selection(object):
         self.subj.put(self.head, contents)
         self.head = self.tail = self.head + len(contents)
         return contents
+
 
 module = sys.modules[__name__]
 poll   = gate.new(module)
@@ -267,6 +269,12 @@ def hcarets_below(node):
         node   = parent
         parent = node.parent
 
+def find_caret(subj, index):
+    for frame in rootbox.traverse():
+        if isinstance(frame, boxmodel.Caret):
+            if frame.subj == subj and frame.index == index:
+                return frame
+
 def pick_nearest(x, y):
     def nearest(node):
         dx, dy = delta_point_rect(cursor, node.rect)
@@ -368,12 +376,73 @@ def fall_after(sel):
     if type != 'list':
         fall_after(sel)
 
+def fall_left_leaf(node):
+    if node.parent is None:
+        return Selection.top(node)
+    index = node.parent.index(node)
+    if index > 0:
+        return Selection.bottom(node.parent[index - 1])
+    else:
+        return fall_left_leaf(node.parent)
+
+def fall_right_leaf(node):
+    if node.parent is None:
+        return Selection.bottom(node)
+    index = node.parent.index(node) + 1
+    if index < len(node.parent):
+        return Selection.top(node.parent[index])
+    else:
+        return fall_right_leaf(node.parent)
+
+def navigate(sel, hcarets_fn):
+    caret = find_caret(sel.subj, sel.head)
+    if caret is None:
+        return
+    if sel.x_anchor is None:
+        sel.x_anchor = caret.rect[0]
+    def nearest(node):
+        x,y,w,h = node.rect
+        return abs(x - sel.x_anchor)
+    try:
+        node = min(hcarets_fn(caret), key=nearest)
+    except ValueError as v:
+        return
+    else:
+        sel.subj = node.subj
+        sel.head = sel.tail = node.index
+
 def process_event(ev):
     global live
     sel = document.selection
     if ev.type == pygame.KEYDOWN:
         if ev.key == pygame.K_ESCAPE:
             live = False
+        elif ev.key == pygame.K_LEFT:
+            if sel.head > 0:
+                if sel.subj.type == 'list':
+                    sel = document.selection = Selection.bottom(sel.subj[sel.head-1])
+                else:
+                    sel.head -= 1
+                    sel.tail = sel.head
+                    sel.x_anchor = None
+            else:
+                sel = document.selection = fall_left_leaf(sel.subj)
+        elif ev.key == pygame.K_RIGHT:
+            if sel.head < len(sel.subj):
+                if sel.subj.type == 'list':
+                    sel = document.selection = Selection.top(sel.subj[sel.head])
+                else:
+                    sel.head += 1
+                    sel.tail = sel.head
+                    sel.x_anchor = None
+            else:
+                sel = document.selection = fall_right_leaf(sel.subj)
+
+            pass
+        elif ev.key == pygame.K_UP:
+            navigate(sel, hcarets_above)
+        elif ev.key == pygame.K_DOWN:
+            navigate(sel, hcarets_below)
         elif ev.unicode == '\x08':
             if sel.head == sel.tail and sel.head > 0:
                 sel.head -= 1
@@ -387,18 +456,21 @@ def process_event(ev):
             sel.put([subj])
             sel.subj = subj
             sel.head = sel.tail = 0
+            sel.x_anchor = None
         elif ev.unicode == '"':
             slit(sel)
             subj = model.Node("", u"", u"")
             sel.put([subj])
             sel.subj = subj
             sel.head = sel.tail = 0
+            sel.x_anchor = None
         elif ev.unicode == '#':
             slit(sel)
             subj = model.Node("", u"", "")
             sel.put([subj])
             sel.subj = subj
             sel.head = sel.tail = 0
+            sel.x_anchor = None
         elif ev.unicode == '(':
             fall_before(sel)
         elif ev.unicode == ')':
@@ -418,6 +490,7 @@ def process_event(ev):
         if node is not None:
             sel.subj = node.subj
             sel.head = sel.tail = node.index
+            sel.x_anchor = None
 
 def paint(t):
     glClearColor(0.8, 0.8, 0.8, 1)
