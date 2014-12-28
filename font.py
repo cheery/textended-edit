@@ -60,17 +60,28 @@ class Font(object):
             kern = kern[1], ord(ch)
             kern_amt = self.kernings.get(kern, 0)
             if kern[1] not in self.characters:
-                continue
-            char = self.characters[kern[1]]
-            b = (self.base - char['yoffset']) * scale
-            w = char['width'] * scale
-            h = char['height'] * scale
-            x1 = char['xoffset'] * scale
-            x2 = x1 + w
-            x3 = (char['xadvance'] + kern_amt) * scale
-            result.append(Glue(x1))
-            result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding))
-            result.append(Glue(x3 - x2))
+                for ch in '\\x' + format(kern[1], '02x'):
+                    char = self.characters[ord(ch)]
+                    b = (self.base - char['yoffset']) * scale
+                    w = char['width'] * scale * 0.5
+                    h = char['height'] * scale
+                    x1 = char['xoffset'] * scale * 0.5
+                    x2 = x1 + w
+                    x3 = (char['xadvance']) * scale * 0.5
+                    result.append(Glue(x1))
+                    result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding))
+                    result.append(Glue(x3 - x2))
+            else:
+                char = self.characters[kern[1]]
+                b = (self.base - char['yoffset']) * scale
+                w = char['width'] * scale
+                h = char['height'] * scale
+                x1 = char['xoffset'] * scale
+                x2 = x1 + w
+                x3 = (char['xadvance'] + kern_amt) * scale
+                result.append(Glue(x1))
+                result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding))
+                result.append(Glue(x3 - x2))
             index += 1
             result.append(Caret(text, index))
         return result

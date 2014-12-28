@@ -1,4 +1,5 @@
 import textended
+import tempfile, os
 
 class Symbol(object):
     def __init__(self, string):

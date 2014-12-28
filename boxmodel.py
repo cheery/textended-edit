@@ -66,14 +66,29 @@ def _parent(subj, contents):
         node.parent = subj
 
 def hpack(contents):
-    width = sum(node.width for node in contents if node.render > 0)
-    height = max(node.height for node in contents if node.render == 1)
-    depth = max(node.depth for node in contents if node.render == 1)
+    try: # "rather ask for forgiveness than permission" ...oh and keep an eye on that landmine.
+        width = sum(node.width for node in contents if node.render > 0)
+    except ValueError as v:
+        width = 10
+    try:
+        height = max(node.height for node in contents if node.render == 1)
+    except ValueError as v:
+        height = 10
+    try:
+        depth = max(node.depth for node in contents if node.render == 1)
+    except ValueError as v:
+        depth = 10
     return HBox(width, height, depth, contents)
 
 def vpack(contents):
-    width = max(node.width for node in contents if node.render == 1)
-    vsize = sum(vsize_of(node) for node in contents if node.render > 0)
+    try:
+        width = max(node.width for node in contents if node.render == 1)
+    except ValueError as v:
+        width = 10
+    try:
+        vsize = sum(vsize_of(node) for node in contents if node.render > 0)
+    except ValueError as v:
+        vsize = 10
     return VBox(width, 0, vsize, contents)
 
 def vsize_of(node):

@@ -21,6 +21,13 @@ class Document(object):
     def __init__(self, body, selection):
         self.body = body
         self.selection = selection
+        self.filename = None
+        self.copybuf = None
+
+class Position(object):
+    def __init__(self, subj, index):
+        self.subj = subj
+        self.index = index
 
 class Selection(object):
     def __init__(self, subj, head, tail):
@@ -54,6 +61,10 @@ class Selection(object):
         self.head = self.tail = self.start
         return contents
 
+    def yank(self):
+        contents = self.subj.yank(self.start, self.stop)
+        return contents
+
     def put(self, contents):
         if self.head != self.tail:
             self.drop()
@@ -68,10 +79,14 @@ poll   = gate.new(module)
 rootbox = None
 contents = []
 for path in sys.argv[1:]:
-    contents.extend(model.load(path))
+    if os.path.exists(path):
+        contents.extend(model.load(path))
 body = model.Node("", u"", contents)
 selection = Selection.bottom(body)
 document = Document(body, selection)
+
+if len(sys.argv) == 2:
+    document.filename = sys.argv[1]
 
 def layout_generic(node):
     if not isinstance(node, model.Node):
@@ -292,15 +307,6 @@ def update_cursor(t):
     if rootbox is None:
         return
     
-    #node = pick_nearest(x, y)
-    #if node is not None:
-    #    visual.quad(node.rect, (0, 0, 255, 1))
-    #    for hcr in hcarets_above(node):
-    #        visual.quad(hcr.rect, (0, 255, 255, 1))
-    #    for hcr in hcarets_below(node):
-    #        visual.quad(hcr.rect, (255, 0, 255, 1))
-
-
     cursors = defaultdict(list)
     for node in rootbox.traverse():
         if not isinstance(node, boxmodel.Caret):
@@ -313,20 +319,20 @@ def update_cursor(t):
             continue
         cursors[node.parent].append(node.rect)
 
-    color = (0, 0, 1.0, 0.75)
+    color = (0, 0, 1.0, 0.5)
     if document.selection.subj.type == 'list':
-        color = (0, 1.0, 0.0, 0.75)
+        color = (0, 1.0, 0.0, 0.5)
     if document.selection.subj.type == 'string':
-        color = (1.0, 1.0, 0.0, 0.75)
+        color = (1.0, 1.0, 0.0, 0.5)
     if document.selection.subj.type == 'binary':
-        color = (0.5, 0.0, 1.0, 0.75)
+        color = (0.5, 0.0, 1.0, 0.5)
     for container, cursorset in cursors.items():
         x0, y0, w0, h0 = cursorset[0]
         x2 = x0+w0
         y2 = y0+h0
         for x1, y1, w1, h1 in cursorset[1:]:
-            x2 = max(x0+w0, x1+w1)
-            y2 = max(y0+h0, y1+h1)
+            x2 = max(x2, x1+w1)
+            y2 = max(y2, y1+h1)
             x0 = min(x0, x1)
             y0 = min(y0, y1)
         visual.quad((x0, y0, x2-x0, y2-y0), color)
@@ -411,10 +417,44 @@ def navigate(sel, hcarets_fn):
         sel.subj = node.subj
         sel.head = sel.tail = node.index
 
+def hierarchy_of(node):
+    result = [node]
+    while node.parent is not None:
+        result.append(node.parent)
+        node = node.parent
+    result.reverse()
+    return result
+
+def simplify_selection(headpos, tailpos):
+    if headpos.subj is tailpos.subj:
+        return Selection(headpos.subj, headpos.index, tailpos.index)
+    hh = hierarchy_of(headpos.subj)
+    th = hierarchy_of(tailpos.subj)
+    i = 0
+    for c_a, c_b in zip(hh, th):
+        if c_a is c_b:
+            i += 1
+        else:
+            break
+    assert i > 0
+    subj = hh[i-1]
+    head_inc = i < len(hh)
+    head = subj.index(hh[i]) if head_inc else headpos.index
+    tail_inc = i < len(th)
+    tail = subj.index(th[i]) if tail_inc else tailpos.index
+    if tail <= head:
+        head += head_inc
+    else:
+        tail += tail_inc
+    return Selection(subj, head, tail)
+
+cursor_tail = None
 def process_event(ev):
-    global live
+    global live, cursor_tail
     sel = document.selection
     if ev.type == pygame.KEYDOWN:
+        ctrl = (ev.mod & pygame.KMOD_CTRL) != 0
+        shift = (ev.mod & pygame.KMOD_SHIFT) != 0
         if ev.key == pygame.K_ESCAPE:
             live = False
         elif ev.key == pygame.K_LEFT:
@@ -437,15 +477,32 @@ def process_event(ev):
                     sel.x_anchor = None
             else:
                 sel = document.selection = fall_right_leaf(sel.subj)
-
-            pass
         elif ev.key == pygame.K_UP:
             navigate(sel, hcarets_above)
         elif ev.key == pygame.K_DOWN:
             navigate(sel, hcarets_below)
+        elif ctrl and ev.key == pygame.K_s and (document.filename is not None):
+            model.save(document.filename, document.body)
+        elif ctrl and ev.key == pygame.K_x:
+            document.copybuf = sel.drop()
+        elif ctrl and ev.key == pygame.K_c:
+            document.copybuf = sel.yank()
+        elif ctrl and ev.key == pygame.K_v and (document.copybuf is not None):
+            if sel.subj.type == 'list' and isinstance(document.copybuf, list):
+                sel.put(document.copybuf)
+            if sel.subj.type == 'symbol' and isinstance(document.copybuf, unicode):
+                sel.put(document.copybuf)
+            if sel.subj.type == 'string' and isinstance(document.copybuf, unicode):
+                sel.put(document.copybuf)
+            if sel.subj.type == 'binary' and isinstance(document.copybuf, str):
+                sel.put(document.copybuf)
         elif ev.unicode == '\x08':
             if sel.head == sel.tail and sel.head > 0:
                 sel.head -= 1
+            sel.drop()
+        elif ev.unicode == '\x7f':
+            if sel.head == sel.tail and sel.head < len(sel.subj):
+                sel.head += 1
             sel.drop()
         elif ev.unicode == ' ' and sel.subj.type not in ('string', 'binary'):
             if sel.subj.type == 'symbol':
@@ -476,7 +533,7 @@ def process_event(ev):
         elif ev.unicode == ')':
             fall_after(sel)
         elif len(ev.unicode) > 0:
-            if sel.subj.type in ('string', 'symbol'):
+            if sel.subj.type in ('string', 'symbol', 'binary'):
                 sel.put(ev.unicode)
             elif sel.subj.type == 'list':
                 node = model.Symbol(ev.unicode)
@@ -485,12 +542,22 @@ def process_event(ev):
     if ev.type == pygame.MOUSEMOTION:
         cursor[0] = ev.pos[0]
         cursor[1] = screen.get_height() - ev.pos[1]
+        if not any(ev.buttons):
+            cursor_tail = None
+        if cursor_tail is not None:
+            node = pick_nearest(*ev.pos)
+            if node is not None:
+                document.headpos = Position(node.subj, node.index)
+                document.selection = simplify_selection(document.headpos, document.tailpos)
     if ev.type == pygame.MOUSEBUTTONDOWN:
         node = pick_nearest(*ev.pos)
         if node is not None:
             sel.subj = node.subj
             sel.head = sel.tail = node.index
             sel.x_anchor = None
+            cursor_tail = Position(node.subj, node.index)
+            document.headpos = document.tailpos = cursor_tail
+            document.selection = simplify_selection(document.headpos, document.tailpos)
 
 def paint(t):
     glClearColor(0.8, 0.8, 0.8, 1)
@@ -531,17 +598,26 @@ def paint(t):
     visual.render(screen)
 
 live = True
-crash = False
 while live:
-    try:
-        poll(crash)
-        for ev in pygame.event.get():
-            process_event(ev)
-            if ev.type == pygame.QUIT:
-                live = False
-        paint(time.time())
-        pygame.display.flip()
-        crash = False
-    except Exception as exc:
-        traceback.print_exc()
-        crash = True
+    for ev in pygame.event.get():
+        process_event(ev)
+        if ev.type == pygame.QUIT:
+            live = False
+    paint(time.time())
+    pygame.display.flip()
+
+#live = True
+#crash = False
+#while live:
+#    try:
+#        poll(crash)
+#        for ev in pygame.event.get():
+#            process_event(ev)
+#            if ev.type == pygame.QUIT:
+#                live = False
+#        paint(time.time())
+#        pygame.display.flip()
+#        crash = False
+#    except Exception as exc:
+#        traceback.print_exc()
+#        crash = True
