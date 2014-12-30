@@ -74,7 +74,7 @@ class Selection(object):
 
 
 module = sys.modules[__name__]
-poll   = gate.new(module)
+#poll   = gate.new(module)
 
 rootbox = None
 contents = []
