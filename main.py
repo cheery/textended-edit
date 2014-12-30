@@ -82,6 +82,7 @@ for path in sys.argv[1:]:
     if os.path.exists(path):
         contents.extend(model.load(path))
 body = model.Node("", u"", contents)
+
 selection = Selection.bottom(body)
 document = Document(body, selection)
 
@@ -105,14 +106,15 @@ def layout_generic(node):
         hmode.extend(sans(')', 14))
         return hmode
 
-def build_boxmodel(contents):
+def build_boxmodel():
+    if document.body.type != 'list':
+        return boxmodel.hpack(sans(document.body, 12))
     mode = layout.VMode(document.body)
     for i, node in enumerate(document.body):
         if i > 0:
             mode.append(boxmodel.Glue(8))
         mode(layout_generic, node)
     return mode.freeze()
-
 
     return boxmodel.vpack([
         boxmodel.Caret(None, 0),
@@ -231,7 +233,7 @@ def update_characters(t):
     vertexcount = 0
     vertices = []
 
-    rootbox = build_boxmodel(contents)
+    rootbox = build_boxmodel()
     burst(vertices, rootbox, 50, screen.get_height() - 50)
 
     vertices = (GLfloat * len(vertices))(*vertices)
@@ -339,6 +341,8 @@ def update_cursor(t):
 
 def slit(sel):
     if sel.subj.type == 'list':
+        return
+    if sel.subj.parent is None:
         return
     parent = sel.subj.parent
     pos = parent.index(sel.subj)
