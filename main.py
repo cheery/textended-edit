@@ -16,6 +16,18 @@ from OpenGL.GL import *
 from OpenGL.GL import shaders
 from ctypes import c_void_p
 from collections import defaultdict
+from model import Position, Selection
+
+class Editor(object):
+    def __init__(self, document, x=0, y=0, width=200, height=200):
+        self.document = document
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.children = []
+        self.rootbox = None
+        self.build_rootbox = None
 
 class Document(object):
     def __init__(self, body, selection):
@@ -24,70 +36,25 @@ class Document(object):
         self.filename = None
         self.copybuf = None
 
-class Position(object):
-    def __init__(self, subj, index):
-        self.subj = subj
-        self.index = index
-
-class Selection(object):
-    def __init__(self, subj, head, tail):
-        self.subj = subj
-        self.head = head
-        self.tail = tail
-        self.x_anchor = None
-
-    @property
-    def start(self):
-        return min(self.head, self.tail)
-    
-    @property
-    def stop(self):
-        return max(self.head, self.tail)
-
-    @classmethod
-    def top(cls, node):
-        while node.type == 'list' and len(node) > 0:
-            node = node[0]
-        return cls(node, 0, 0)
-
-    @classmethod
-    def bottom(cls, node):
-        while node.type == 'list' and len(node) > 0:
-            node = node[len(node) - 1]
-        return cls(node, len(node), len(node))
-
-    def drop(self):
-        contents = self.subj.drop(self.start, self.stop)
-        self.head = self.tail = self.start
-        return contents
-
-    def yank(self):
-        contents = self.subj.yank(self.start, self.stop)
-        return contents
-
-    def put(self, contents):
-        if self.head != self.tail:
-            self.drop()
-        self.subj.put(self.head, contents)
-        self.head = self.tail = self.head + len(contents)
-        return contents
-
-
 module = sys.modules[__name__]
 #poll   = gate.new(module)
 
-rootbox = None
-contents = []
-for path in sys.argv[1:]:
-    if os.path.exists(path):
-        contents.extend(model.load(path))
-body = model.Node("", u"", contents)
+def create_editor():
+    contents = []
+    for path in sys.argv[1:]:
+        if os.path.exists(path):
+            contents.extend(model.load(path))
+    body = model.Node("", u"", contents)
 
-selection = Selection.bottom(body)
-document = Document(body, selection)
+    selection = Selection.bottom(body)
+    document = Document(body, selection)
+    if len(sys.argv) == 2:
+        document.filename = sys.argv[1]
 
-if len(sys.argv) == 2:
-    document.filename = sys.argv[1]
+    editor = Editor(document)
+    return editor
+
+editor = create_editor()
 
 def layout_generic(node):
     if not isinstance(node, model.Node):
@@ -106,41 +73,46 @@ def layout_generic(node):
         hmode.extend(sans(')', 14))
         return hmode
 
-def build_boxmodel():
-    if document.body.type != 'list':
-        return boxmodel.hpack(sans(document.body, 12))
-    mode = layout.VMode(document.body)
-    for i, node in enumerate(document.body):
+def build_boxmodel(editor):
+    body = editor.document.body
+    if body.type != 'list':
+        return boxmodel.hpack(sans(body, 12))
+    mode = layout.VMode(body)
+    for i, node in enumerate(body):
         if i > 0:
             mode.append(boxmodel.Glue(8))
         mode(layout_generic, node)
     return mode.freeze()
 
-    return boxmodel.vpack([
-        boxmodel.Caret(None, 0),
-        boxmodel.hpack(sans("Hello world") + [
-            boxmodel.Caret(None, 0),
-            boxmodel.vpack([
-                boxmodel.Caret(None, 0),
-                boxmodel.hpack(sans("t * r", 8)),
-                boxmodel.Caret(None, 1),
-                boxmodel.hpack(sans("t + r", 8)),
-                boxmodel.Caret(None, 2),
-            ]),
-            boxmodel.Caret(None, 1),
-        ] + sans("Abcd")),
-        boxmodel.Caret(None, 1),
-        boxmodel.hpack(sans("AbCD", 80)),
-        boxmodel.Caret(None, 2),
-        boxmodel.hpack(sans("Hello ^", 32)),
-        boxmodel.Caret(None, 3),
-    ])
+editor.build_rootbox = build_boxmodel
+
+#    return boxmodel.vpack([
+#        boxmodel.Caret(None, 0),
+#        boxmodel.hpack(sans("Hello world") + [
+#            boxmodel.Caret(None, 0),
+#            boxmodel.vpack([
+#                boxmodel.Caret(None, 0),
+#                boxmodel.hpack(sans("t * r", 8)),
+#                boxmodel.Caret(None, 1),
+#                boxmodel.hpack(sans("t + r", 8)),
+#                boxmodel.Caret(None, 2),
+#            ]),
+#            boxmodel.Caret(None, 1),
+#        ] + sans("Abcd")),
+#        boxmodel.Caret(None, 1),
+#        boxmodel.hpack(sans("AbCD", 80)),
+#        boxmodel.Caret(None, 2),
+#        boxmodel.hpack(sans("Hello ^", 32)),
+#        boxmodel.Caret(None, 3),
+#    ])
 
 #pygame.display.init()
 #pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLEBUFFERS, 1)
 #pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLESAMPLES, 8)
 
 screen = pygame.display.set_mode((640, 480), pygame.DOUBLEBUF | pygame.OPENGL)
+editor.width, editor.height = screen.get_size()
+
 
 visual = renderers.Visual()
 
@@ -229,12 +201,12 @@ def burst(vertices, subj, x, y):
                 #visual.quad(node.rect, (0, 255, 0, 0.1))
 
 def update_characters(t):
-    global vertexcount, rootbox
+    global vertexcount
     vertexcount = 0
     vertices = []
 
-    rootbox = build_boxmodel()
-    burst(vertices, rootbox, 50, screen.get_height() - 50)
+    editor.rootbox = editor.build_rootbox(editor)
+    burst(vertices, editor.rootbox, editor.x, editor.height - editor.y)
 
     vertices = (GLfloat * len(vertices))(*vertices)
     glBindBuffer(GL_ARRAY_BUFFER, vbo)
@@ -287,7 +259,7 @@ def hcarets_below(node):
         parent = node.parent
 
 def find_caret(subj, index):
-    for frame in rootbox.traverse():
+    for frame in editor.rootbox.traverse():
         if isinstance(frame, boxmodel.Caret):
             if frame.subj == subj and frame.index == index:
                 return frame
@@ -297,7 +269,7 @@ def pick_nearest(x, y):
         dx, dy = delta_point_rect(cursor, node.rect)
         return dx**2 + dy**4
     try:
-        node = min((node for node in rootbox.traverse() if is_hcaret(node)), key=nearest)
+        node = min((node for node in editor.rootbox.traverse() if is_hcaret(node)), key=nearest)
     except ValueError as v:
         return
     return node
@@ -306,11 +278,12 @@ cursor = [0, 0]
 def update_cursor(t):
     x, y = cursor
 
-    if rootbox is None:
+    if editor.rootbox is None:
         return
     
+    document = editor.document
     cursors = defaultdict(list)
-    for node in rootbox.traverse():
+    for node in editor.rootbox.traverse():
         if not isinstance(node, boxmodel.Caret):
             continue
         if node.subj != document.selection.subj:
@@ -455,6 +428,7 @@ def simplify_selection(headpos, tailpos):
 cursor_tail = None
 def process_event(ev):
     global live, cursor_tail
+    document = editor.document
     sel = document.selection
     if ev.type == pygame.KEYDOWN:
         ctrl = (ev.mod & pygame.KMOD_CTRL) != 0
