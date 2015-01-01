@@ -28,6 +28,8 @@ class Editor(object):
         self.children = []
         self.rootbox = None
         self.build_rootbox = None
+        self.update_hook = lambda editor: None
+        self.close_hook = lambda editor: None
 
 class Document(object):
     def __init__(self, body, selection):
@@ -55,6 +57,7 @@ def create_editor():
     return editor
 
 editor = create_editor()
+focus = editor
 
 def layout_generic(node):
     if not isinstance(node, model.Node):
@@ -65,6 +68,8 @@ def layout_generic(node):
         return sans(node, 12)
     else:
         hmode = layout.HMode(node)
+        if len(node.label) > 0:
+            hmode.extend(sans(node.label + ':', 8))
         hmode.extend(sans('(', 14))
         for i, subnode in enumerate(node):
             if i > 0:
@@ -112,7 +117,10 @@ editor.build_rootbox = build_boxmodel
 
 screen = pygame.display.set_mode((640, 480), pygame.DOUBLEBUF | pygame.OPENGL)
 editor.width, editor.height = screen.get_size()
-
+editor.x += 10
+editor.y += 10
+editor.width  -= 20
+editor.height -= 20
 
 visual = renderers.Visual()
 
@@ -205,8 +213,12 @@ def update_characters(t):
     vertexcount = 0
     vertices = []
 
-    editor.rootbox = editor.build_rootbox(editor)
-    burst(vertices, editor.rootbox, editor.x, editor.height - editor.y)
+    def layout_editor(editor, x, y):
+        editor.rootbox = editor.build_rootbox(editor)
+        burst(vertices, editor.rootbox, editor.x+x, editor.height - editor.y+y)
+        for subeditor in editor.children:
+            layout_editor(subeditor, x+editor.x, y+editor.y)
+    layout_editor(editor, 0, 0)
 
     vertices = (GLfloat * len(vertices))(*vertices)
     glBindBuffer(GL_ARRAY_BUFFER, vbo)
@@ -258,32 +270,16 @@ def hcarets_below(node):
         node   = parent
         parent = node.parent
 
-def find_caret(subj, index):
-    for frame in editor.rootbox.traverse():
-        if isinstance(frame, boxmodel.Caret):
-            if frame.subj == subj and frame.index == index:
-                return frame
-
-def pick_nearest(x, y):
-    def nearest(node):
-        dx, dy = delta_point_rect(cursor, node.rect)
-        return dx**2 + dy**4
-    try:
-        node = min((node for node in editor.rootbox.traverse() if is_hcaret(node)), key=nearest)
-    except ValueError as v:
-        return
-    return node
-
 cursor = [0, 0]
 def update_cursor(t):
     x, y = cursor
 
-    if editor.rootbox is None:
+    if focus.rootbox is None:
         return
     
-    document = editor.document
+    document = focus.document
     cursors = defaultdict(list)
-    for node in editor.rootbox.traverse():
+    for node in focus.rootbox.traverse():
         if not isinstance(node, boxmodel.Caret):
             continue
         if node.subj != document.selection.subj:
@@ -377,8 +373,14 @@ def fall_right_leaf(node):
     else:
         return fall_right_leaf(node.parent)
 
-def navigate(sel, hcarets_fn):
-    caret = find_caret(sel.subj, sel.head)
+def find_caret(editor, subj, index):
+    for frame in editor.rootbox.traverse():
+        if isinstance(frame, boxmodel.Caret):
+            if frame.subj == subj and frame.index == index:
+                return frame
+
+def navigate(editor, sel, hcarets_fn):
+    caret = find_caret(editor, sel.subj, sel.head)
     if caret is None:
         return
     if sel.x_anchor is None:
@@ -425,16 +427,50 @@ def simplify_selection(headpos, tailpos):
         tail += tail_inc
     return Selection(subj, head, tail)
 
+def label_editor(editor, sel):
+    global focus
+    if sel.subj.type == 'symbol':
+        subj = sel.subj.parent
+    else:
+        subj = sel.subj
+    if subj is None:
+        return
+
+    body = model.Symbol(subj.label)
+
+    selection = Selection.bottom(body)
+    document = Document(body, selection)
+    label_editor = Editor(document, x=0, y=0)
+    label_editor.build_rootbox = editor.build_rootbox
+    editor.children.append(label_editor)
+    focus = label_editor
+
+    def hook(editor):
+        subj.label = label_editor.document.body[:]
+    label_editor.close_hook  = hook
+    label_editor.update_hook = hook
+
 cursor_tail = None
+alt_pressed = False
 def process_event(ev):
-    global live, cursor_tail
-    document = editor.document
+    global live, cursor_tail, alt_pressed, focus
+    document = focus.document
     sel = document.selection
+
     if ev.type == pygame.KEYDOWN:
+        if alt_pressed and ev.key == pygame.K_LALT:
+            label_editor(focus, sel)
+        alt_pressed = False
+
         ctrl = (ev.mod & pygame.KMOD_CTRL) != 0
         shift = (ev.mod & pygame.KMOD_SHIFT) != 0
         if ev.key == pygame.K_ESCAPE:
-            live = False
+            if focus != editor:
+                focus.close_hook(focus)
+                editor.children.remove(focus)
+                focus = editor
+            else:
+                live = False
         elif ev.key == pygame.K_LEFT:
             if sel.head > 0:
                 if sel.subj.type == 'list':
@@ -456,9 +492,11 @@ def process_event(ev):
             else:
                 sel = document.selection = fall_right_leaf(sel.subj)
         elif ev.key == pygame.K_UP:
-            navigate(sel, hcarets_above)
+            navigate(focus, sel, hcarets_above)
         elif ev.key == pygame.K_DOWN:
-            navigate(sel, hcarets_below)
+            navigate(focus, sel, hcarets_below)
+        elif ev.key == pygame.K_LALT:
+            alt_pressed = True
         elif ctrl and ev.key == pygame.K_s and (document.filename is not None):
             model.save(document.filename, document.body)
         elif ctrl and ev.key == pygame.K_x:
@@ -523,12 +561,12 @@ def process_event(ev):
         if not any(ev.buttons):
             cursor_tail = None
         if cursor_tail is not None:
-            node = pick_nearest(*ev.pos)
+            node = pick_nearest(focus, *ev.pos)
             if node is not None:
                 document.headpos = Position(node.subj, node.index)
                 document.selection = simplify_selection(document.headpos, document.tailpos)
     if ev.type == pygame.MOUSEBUTTONDOWN:
-        node = pick_nearest(*ev.pos)
+        node = pick_nearest(focus, *ev.pos)
         if node is not None:
             sel.subj = node.subj
             sel.head = sel.tail = node.index
@@ -536,6 +574,17 @@ def process_event(ev):
             cursor_tail = Position(node.subj, node.index)
             document.headpos = document.tailpos = cursor_tail
             document.selection = simplify_selection(document.headpos, document.tailpos)
+    focus.update_hook(focus)
+
+def pick_nearest(editor, x, y):
+    def nearest(node):
+        dx, dy = delta_point_rect(cursor, node.rect)
+        return dx**2 + dy**4
+    try:
+        node = min((node for node in editor.rootbox.traverse() if is_hcaret(node)), key=nearest)
+    except ValueError as v:
+        return
+    return node
 
 def paint(t):
     glClearColor(0.8, 0.8, 0.8, 1)
