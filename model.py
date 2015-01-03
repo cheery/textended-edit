@@ -76,6 +76,8 @@ class Node(object):
         return contents
 
     def put(self, index, contents):
+        if self.type == 'binary' and isinstance(contents, unicode):
+            contents = contents.encode('utf-8')
         self.contents = self.contents[:index] + contents + self.contents[index:]
         if self.type == 'list':
             for node in contents:

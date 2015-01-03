@@ -12,6 +12,8 @@ import tempfile
 import layout
 import model
 import os
+import defaultlayout
+import ast
 from OpenGL.GL import *
 from OpenGL.GL import shaders
 from ctypes import c_void_p
@@ -59,37 +61,7 @@ def create_editor():
 editor = create_editor()
 focus = editor
 
-def layout_generic(node):
-    if not isinstance(node, model.Node):
-        return sans(node, 12)
-    elif isinstance(node.contents, str):
-        return sans(node, 12)
-    elif isinstance(node.contents, unicode):
-        return sans(node, 12)
-    else:
-        hmode = layout.HMode(node)
-        if len(node.label) > 0:
-            hmode.extend(sans(node.label + ':', 8))
-        hmode.extend(sans('(', 14))
-        for i, subnode in enumerate(node):
-            if i > 0:
-                hmode.append(boxmodel.Glue(8))
-            hmode(layout_generic, subnode)
-        hmode.extend(sans(')', 14))
-        return hmode
-
-def build_boxmodel(editor):
-    body = editor.document.body
-    if body.type != 'list':
-        return boxmodel.hpack(sans(body, 12))
-    mode = layout.VMode(body)
-    for i, node in enumerate(body):
-        if i > 0:
-            mode.append(boxmodel.Glue(8))
-        mode(layout_generic, node)
-    return mode.freeze()
-
-editor.build_rootbox = build_boxmodel
+editor.build_rootbox = defaultlayout.build_boxmodel
 
 #    return boxmodel.vpack([
 #        boxmodel.Caret(None, 0),
@@ -128,7 +100,7 @@ glEnable(GL_TEXTURE_2D)
 glEnable(GL_BLEND)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-sans = font.load('OpenSans.fnt')
+sans = defaultlayout.sans#font.load('OpenSans.fnt')
 
 data = pygame.image.tostring(sans.image, "RGBA", 1)
 texture = glGenTextures(1)
@@ -450,6 +422,17 @@ def label_editor(editor, sel):
     label_editor.close_hook  = hook
     label_editor.update_hook = hook
 
+def evaluate_document(document):
+    for item in document.body:
+        if item.label == 'language':
+            language = item[:]
+            break
+    else:
+        return
+    if language != 'python':
+        return
+    print 'execute here'
+
 cursor_tail = None
 alt_pressed = False
 def process_event(ev):
@@ -471,6 +454,8 @@ def process_event(ev):
                 focus = editor
             else:
                 live = False
+        elif ev.key == pygame.K_F5:
+            evaluate_document(document)
         elif ev.key == pygame.K_LEFT:
             if sel.head > 0:
                 if sel.subj.type == 'list':
