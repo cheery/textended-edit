@@ -1,6 +1,6 @@
 # Structure Editor, for .t+ -files.
 
-If you decide to try it, make sure you've got pygame, pyopengl and textended.
+If you decide to try it, make sure you've got pygame, pyopengl and textended. I've tried it with python 2.7
 
 You can obtain textended by:
 
