@@ -7,3 +7,5 @@ You can obtain textended by:
     git clone https://github.com/cheery/textended/
 
 Related blog post: http://boxbase.org/entries/2014/dec/29/first-editor-release/
+
+There's an IRC channel #essence in irc.freenode.net, for those who like to discuss about visual programming/structured editing.
