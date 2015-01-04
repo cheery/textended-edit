@@ -10,7 +10,6 @@ import textended
 import renderers
 import tempfile
 import layout
-import model
 import os
 import defaultlayout
 import ast
@@ -18,11 +17,13 @@ from OpenGL.GL import *
 from OpenGL.GL import shaders
 from ctypes import c_void_p
 from collections import defaultdict
-from model import Position, Selection
+import dom
+from dom import Position, Selection
 
 class Editor(object):
-    def __init__(self, document, x=0, y=0, width=200, height=200):
+    def __init__(self, document, selection, x=0, y=0, width=200, height=200):
         self.document = document
+        self.selection = selection
         self.x = x
         self.y = y
         self.width = width
@@ -32,11 +33,6 @@ class Editor(object):
         self.build_rootbox = None
         self.update_hook = lambda editor: None
         self.close_hook = lambda editor: None
-
-class Document(object):
-    def __init__(self, body, selection):
-        self.body = body
-        self.selection = selection
         self.filename = None
         self.copybuf = None
 
@@ -47,15 +43,15 @@ def create_editor():
     contents = []
     for path in sys.argv[1:]:
         if os.path.exists(path):
-            contents.extend(model.load(path))
-    body = model.Node("", u"", contents)
+            contents.extend(dom.load(path))
+    body = dom.Literal("", u"", contents)
 
-    selection = Selection.bottom(body)
-    document = Document(body, selection)
+    document = dom.Document(body)
     if len(sys.argv) == 2:
         document.filename = sys.argv[1]
 
-    editor = Editor(document)
+    selection = Selection.bottom(body)
+    editor = Editor(document, selection)
     return editor
 
 editor = create_editor()
@@ -205,7 +201,7 @@ def delta_point_rect(point, rect):
 
 def is_hcaret(node):
     if isinstance(node, boxmodel.Caret):
-        if not isinstance(node.subj, (model.Node, model.Symbol)):
+        if not isinstance(node.subj, dom.Node):
             return
         if node.subj.type != 'list' or len(node.subj) == 0:
             return isinstance(node.parent, boxmodel.HBox)
@@ -254,20 +250,20 @@ def update_cursor(t):
     for node in focus.rootbox.traverse():
         if not isinstance(node, boxmodel.Caret):
             continue
-        if node.subj != document.selection.subj:
+        if node.subj != focus.selection.subj:
             continue
-        if node.index < document.selection.start:
+        if node.index < focus.selection.start:
             continue
-        if node.index > document.selection.stop:
+        if node.index > focus.selection.stop:
             continue
         cursors[node.parent].append(node.rect)
 
     color = (0, 0, 1.0, 0.5)
-    if document.selection.subj.type == 'list':
+    if focus.selection.subj.type == 'list':
         color = (0, 1.0, 0.0, 0.5)
-    if document.selection.subj.type == 'string':
+    if focus.selection.subj.type == 'string':
         color = (1.0, 1.0, 0.0, 0.5)
-    if document.selection.subj.type == 'binary':
+    if focus.selection.subj.type == 'binary':
         color = (0.5, 0.0, 1.0, 0.5)
     for container, cursorset in cursors.items():
         x0, y0, w0, h0 = cursorset[0]
@@ -301,9 +297,9 @@ def slit(sel):
         sel.subj = parent
         sel.head = sel.tail = pos + 1
         if type == 'symbol':
-            sel.subj.put(sel.head, [model.Symbol(contents)])
+            sel.subj.put(sel.head, [dom.Symbol(contents)])
         else:
-            sel.subj.put(sel.head, [model.Node("", u"", contents)])
+            sel.subj.put(sel.head, [dom.Literal("", u"", contents)])
 
 def fall_before(sel):
     type = sel.subj.type
@@ -408,11 +404,11 @@ def label_editor(editor, sel):
     if subj is None:
         return
 
-    body = model.Symbol(subj.label)
+    body = dom.Symbol(subj.label)
 
+    document = dom.Document(body)
     selection = Selection.bottom(body)
-    document = Document(body, selection)
-    label_editor = Editor(document, x=0, y=0)
+    label_editor = Editor(document, selection, x=0, y=0)
     label_editor.build_rootbox = editor.build_rootbox
     editor.children.append(label_editor)
     focus = label_editor
@@ -449,7 +445,10 @@ def evaluate_document(document):
             statement = ast.Print(None, [compile_expression(expr) for expr in item], True, lineno=0, col_offset=0)
             statements.append(statement)
         else:
+            if isinstance(item, dom.Literal):
+                print "error at ", repr(item.ident)
             print "should present the error in the editor"
+            print document.nodes
             return
     exec compile(ast.Module(statements), "t+", 'exec')
 
@@ -458,7 +457,7 @@ alt_pressed = False
 def process_event(ev):
     global live, cursor_tail, alt_pressed, focus
     document = focus.document
-    sel = document.selection
+    sel = focus.selection
 
     if ev.type == pygame.KEYDOWN:
         if alt_pressed and ev.key == pygame.K_LALT:
@@ -479,23 +478,23 @@ def process_event(ev):
         elif ev.key == pygame.K_LEFT:
             if sel.head > 0:
                 if sel.subj.type == 'list':
-                    sel = document.selection = Selection.bottom(sel.subj[sel.head-1])
+                    sel = focus.selection = Selection.bottom(sel.subj[sel.head-1])
                 else:
                     sel.head -= 1
                     sel.tail = sel.head
                     sel.x_anchor = None
             else:
-                sel = document.selection = fall_left_leaf(sel.subj)
+                sel = focus.selection = fall_left_leaf(sel.subj)
         elif ev.key == pygame.K_RIGHT:
             if sel.head < len(sel.subj):
                 if sel.subj.type == 'list':
-                    sel = document.selection = Selection.top(sel.subj[sel.head])
+                    sel = focus.selection = Selection.top(sel.subj[sel.head])
                 else:
                     sel.head += 1
                     sel.tail = sel.head
                     sel.x_anchor = None
             else:
-                sel = document.selection = fall_right_leaf(sel.subj)
+                sel = focus.selection = fall_right_leaf(sel.subj)
         elif ev.key == pygame.K_UP:
             navigate(focus, sel, hcarets_above)
         elif ev.key == pygame.K_DOWN:
@@ -503,7 +502,7 @@ def process_event(ev):
         elif ev.key == pygame.K_LALT:
             alt_pressed = True
         elif ctrl and ev.key == pygame.K_s and (document.filename is not None):
-            model.save(document.filename, document.body)
+            dom.save(document.filename, document.body)
         elif ctrl and ev.key == pygame.K_x:
             document.copybuf = sel.drop()
         elif ctrl and ev.key == pygame.K_c:
@@ -530,21 +529,21 @@ def process_event(ev):
                 slit(sel)
         elif ev.unicode == "'":
             slit(sel)
-            subj = model.Node("", u"", [])
+            subj = dom.Literal("", u"", [])
             sel.put([subj])
             sel.subj = subj
             sel.head = sel.tail = 0
             sel.x_anchor = None
         elif ev.unicode == '"':
             slit(sel)
-            subj = model.Node("", u"", u"")
+            subj = dom.Literal("", u"", u"")
             sel.put([subj])
             sel.subj = subj
             sel.head = sel.tail = 0
             sel.x_anchor = None
         elif ev.unicode == '#':
             slit(sel)
-            subj = model.Node("", u"", "")
+            subj = dom.Literal("", u"", "")
             sel.put([subj])
             sel.subj = subj
             sel.head = sel.tail = 0
@@ -557,9 +556,9 @@ def process_event(ev):
             if sel.subj.type in ('string', 'symbol', 'binary'):
                 sel.put(ev.unicode)
             elif sel.subj.type == 'list':
-                node = model.Symbol(ev.unicode)
+                node = dom.Symbol(ev.unicode)
                 sel.put([node])
-                sel = document.selection = Selection.bottom(node)
+                sel = focus.selection = Selection.bottom(node)
     if ev.type == pygame.MOUSEMOTION:
         cursor[0] = ev.pos[0]
         cursor[1] = screen.get_height() - ev.pos[1]
@@ -568,8 +567,8 @@ def process_event(ev):
         if cursor_tail is not None:
             node = pick_nearest(focus, *ev.pos)
             if node is not None:
-                document.headpos = Position(node.subj, node.index)
-                document.selection = simplify_selection(document.headpos, document.tailpos)
+                focus.headpos = Position(node.subj, node.index)
+                focus.selection = simplify_selection(focus.headpos, focus.tailpos)
     if ev.type == pygame.MOUSEBUTTONDOWN:
         node = pick_nearest(focus, *ev.pos)
         if node is not None:
@@ -577,8 +576,8 @@ def process_event(ev):
             sel.head = sel.tail = node.index
             sel.x_anchor = None
             cursor_tail = Position(node.subj, node.index)
-            document.headpos = document.tailpos = cursor_tail
-            document.selection = simplify_selection(document.headpos, document.tailpos)
+            focus.headpos = focus.tailpos = cursor_tail
+            focus.selection = simplify_selection(focus.headpos, focus.tailpos)
     focus.update_hook(focus)
 
 def pick_nearest(editor, x, y):

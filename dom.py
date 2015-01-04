@@ -1,11 +1,21 @@
 import textended
 import tempfile, os
+from random import randint
 
-class Symbol(object):
+class Document(object):
+    def __init__(self, body):
+        self.body = body
+        self.nodes = {}
+        node_insert(self, body)
+
+class Node(object):
+    document = None
+    parent = None
+
+class Symbol(Node):
+    type = 'symbol'
     def __init__(self, string):
-        self.parent = None
         self.string = string
-        self.type = 'symbol'
 
     def copy(self):
         return self.__class__(self.string)
@@ -31,16 +41,15 @@ class Symbol(object):
     def traverse(self):
         yield self
 
-class Node(object):
+class Literal(Node):
     def __init__(self, ident, label, contents):
-        self.parent = None
         self.contents = contents
         self.ident = ident
         self.label = label
         if isinstance(contents, list):
             self.type = 'list'
             for node in contents:
-                assert isinstance(node, (Symbol, Node))
+                assert isinstance(node, Node)
                 assert node.parent is None
                 node.parent = self
         elif isinstance(contents, str):
@@ -66,13 +75,13 @@ class Node(object):
         if isinstance(contents, list):
             for node in contents:
                 node.parent = None
+                node_remove(self.document, node)
         return contents
 
     def yank(self, start, stop):
         contents = self.contents[start:stop]
         if isinstance(contents, list):
             contents = [node.copy() for node in contents]
-
         return contents
 
     def put(self, index, contents):
@@ -81,9 +90,10 @@ class Node(object):
         self.contents = self.contents[:index] + contents + self.contents[index:]
         if self.type == 'list':
             for node in contents:
-                assert isinstance(node, (Symbol, Node))
+                assert isinstance(node, Node)
                 assert node.parent is None
                 node.parent = self
+                node_insert(self.document, node)
         else:
             assert isinstance(contents, (str, unicode))
 
@@ -94,15 +104,42 @@ class Node(object):
                 for node in node.traverse():
                     yield node
 
+def node_insert(document, node):
+    if document is None:
+        return
+    assert node.document is None
+    node.document = document
+    if isinstance(node, Literal):
+        if node.ident == "" or node.ident in document.nodes:
+            ident = chr(randint(1, 255))
+            while ident in document.nodes:
+                ident += chr(randint(0, 255))
+            node.ident = ident
+        document.nodes[node.ident] = node
+        if node.type == 'list':
+            for subnode in node:
+                node_insert(document, subnode)
+
+def node_remove(document, node):
+    node.document = None
+    assert node.document is document
+    if document is None:
+        return
+    if isinstance(node, Literal):
+        del document.nodes[node.ident]
+        if node.type == 'list':
+            for subnode in node:
+                node_remove(document, subnode)
+
 def transform_enc(node):
     if isinstance(node, Symbol):
         return node.string
-    if isinstance(node, Node):
+    if isinstance(node, Literal):
         return (node.ident, node.label, node.contents)
 
 def transform_dec(obj):
     if isinstance(obj, tuple):
-        return Node(*obj)
+        return Literal(*obj)
     return Symbol(obj)
 
 def load(path):

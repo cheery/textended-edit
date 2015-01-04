@@ -1,9 +1,9 @@
-import layout, font, model, boxmodel
+import layout, font, boxmodel, dom
 
 sans = font.load('OpenSans.fnt')
 
 def layout_generic(node):
-    if not isinstance(node, model.Node):
+    if not isinstance(node, dom.Literal):
         return sans(node, 12)
     elif isinstance(node.contents, str):
         if len(node.label) > 0:
