@@ -21,15 +21,27 @@ def layout_generic(node):
             prefix = sans('"', 8)
             postfix = sans('"', 8)
         return prefix + sans(node, 12) + postfix
-    else:
+    elif node.label == 'list':
         hmode = layout.HMode(node)
-        if len(node.label) > 0:
-            hmode.extend(sans(node.label + ':', 8))
-        hmode.extend(sans('(', 14))
+        hmode.extend(sans('[', 14))
         for i, subnode in enumerate(node):
             if i > 0:
                 hmode.append(boxmodel.Glue(8))
             hmode(layout_generic, subnode)
+        hmode.extend(sans(']', 14))
+        return hmode
+    else:
+        hmode = layout.HMode(node)
+        if len(node.label) > 0:
+            hmode.extend(sans(node.label + ':', 8))
+        for i, subnode in enumerate(node):
+            if i == 1:
+                hmode.extend(sans('(', 14))
+            if i > 1:
+                hmode.append(boxmodel.Glue(8))
+            hmode(layout_generic, subnode)
+        if len(node) < 2:
+            hmode.extend(sans('(', 14))
         hmode.extend(sans(')', 14))
         return hmode
 
