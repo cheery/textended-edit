@@ -29,6 +29,7 @@ class Editor(object):
         self.width = width
         self.height = height
         self.children = []
+        self.ver = 0
         self.rootbox = None
         self.build_rootbox = None
         self.update_hook = lambda editor: None
@@ -178,7 +179,6 @@ def burst(vertices, subj, x, y):
 
 def update_characters(t):
     global vertexcount
-    vertexcount = 0
     vertices = []
 
     def layout_editor(editor, x, y):
@@ -186,11 +186,13 @@ def update_characters(t):
         burst(vertices, editor.rootbox, editor.x+x, editor.height - editor.y+y)
         for subeditor in editor.children:
             layout_editor(subeditor, x+editor.x, y+editor.y)
-    layout_editor(editor, 0, 0)
-
-    vertices = (GLfloat * len(vertices))(*vertices)
-    glBindBuffer(GL_ARRAY_BUFFER, vbo)
-    glBufferData(GL_ARRAY_BUFFER, vertices, GL_STREAM_DRAW)
+    if editor.rootbox is None or editor.document.ver != editor.ver:
+        vertexcount = 0
+        layout_editor(editor, 0, 0)
+        vertices = (GLfloat * len(vertices))(*vertices)
+        glBindBuffer(GL_ARRAY_BUFFER, vbo)
+        glBufferData(GL_ARRAY_BUFFER, vertices, GL_STREAM_DRAW)
+        editor.ver = editor.document.ver
 
 def delta_point_rect(point, rect):
     x0, y0 = point
@@ -580,15 +582,35 @@ def process_event(ev):
             focus.selection = simplify_selection(focus.headpos, focus.tailpos)
     focus.update_hook(focus)
 
+#def pick_nearest(editor, x, y):
+#    def nearest(node):
+#        dx, dy = delta_point_rect(cursor, node.rect)
+#        return dx**2 + dy**4
+#    try:
+#        node = min((node for node in editor.rootbox.traverse() if is_hcaret(node)), key=nearest)
+#    except ValueError as v:
+#        return
+#    return node
+
 def pick_nearest(editor, x, y):
-    def nearest(node):
-        dx, dy = delta_point_rect(cursor, node.rect)
-        return dx**2 + dy**4
-    try:
-        node = min((node for node in editor.rootbox.traverse() if is_hcaret(node)), key=nearest)
-    except ValueError as v:
-        return
-    return node
+    def nearest(node, maxdist):
+        near, distance = None, maxdist
+        if isinstance(node, boxmodel.Composite):
+            dx, dy = delta_point_rect(cursor, node.rect)
+            if dx**2 + dy**4 > maxdist:
+                return near, distance
+            for child in node:
+                n, d = nearest(child, distance)
+                if d < distance:
+                    near = n
+                    distance = d
+            return near, distance
+        elif is_hcaret(node):
+            dx, dy = delta_point_rect(cursor, node.rect)
+            return node, dx**2 + dy**4
+        else:
+            return None, float('inf')
+    return nearest(editor.rootbox, 500**4)[0]
 
 def paint(t):
     glClearColor(0.8, 0.8, 0.8, 1)

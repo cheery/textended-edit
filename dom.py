@@ -6,6 +6,7 @@ class Document(object):
     def __init__(self, body):
         self.body = body
         self.nodes = {}
+        self.ver = 1
         node_insert(self, body)
 
 class Node(object):
@@ -29,6 +30,8 @@ class Symbol(Node):
     def drop(self, start, stop):
         text = self.string[start:stop]
         self.string = self.string[:start] + self.string[stop:]
+        if self.document is not None:
+            self.document.ver += 1
         return text
 
     def yank(self, start, stop):
@@ -37,6 +40,8 @@ class Symbol(Node):
     def put(self, index, string):
         assert isinstance(string, (str, unicode))
         self.string = self.string[:index] + string + self.string[index:]
+        if self.document is not None:
+            self.document.ver += 1
 
     def traverse(self):
         yield self
@@ -56,6 +61,16 @@ class Literal(Node):
             self.type = 'binary'
         elif isinstance(contents, unicode):
             self.type = 'string'
+
+    @property
+    def label(self):
+        return self._label
+
+    @label.setter
+    def label(self, label):
+        self._label = label
+        if self.document is not None:
+            self.document.ver += 1
     
     def copy(self):
         return self.__class__(self.ident, self.label, self.yank(0, len(self)))
@@ -76,6 +91,8 @@ class Literal(Node):
             for node in contents:
                 node.parent = None
                 node_remove(self.document, node)
+        if self.document is not None:
+            self.document.ver += 1
         return contents
 
     def yank(self, start, stop):
@@ -96,6 +113,8 @@ class Literal(Node):
                 node_insert(self.document, node)
         else:
             assert isinstance(contents, (str, unicode))
+        if self.document is not None:
+            self.document.ver += 1
 
     def traverse(self):
         yield self
