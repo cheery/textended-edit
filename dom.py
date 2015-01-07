@@ -143,7 +143,7 @@ def transform_dec(obj):
     return Symbol(obj)
 
 def load(path):
-    with open(path) as fd:
+    with open(path, 'rb') as fd:
         contents = textended.load(fd, transform_dec)
     return contents
 
