@@ -38,7 +38,6 @@ class Editor(object):
         self.copybuf = None
 
 module = sys.modules[__name__]
-#poll   = gate.new(module)
 
 def create_editor():
     contents = []
@@ -59,26 +58,6 @@ editor = create_editor()
 focus = editor
 
 editor.build_rootbox = defaultlayout.build_boxmodel
-
-#    return boxmodel.vpack([
-#        boxmodel.Caret(None, 0),
-#        boxmodel.hpack(sans("Hello world") + [
-#            boxmodel.Caret(None, 0),
-#            boxmodel.vpack([
-#                boxmodel.Caret(None, 0),
-#                boxmodel.hpack(sans("t * r", 8)),
-#                boxmodel.Caret(None, 1),
-#                boxmodel.hpack(sans("t + r", 8)),
-#                boxmodel.Caret(None, 2),
-#            ]),
-#            boxmodel.Caret(None, 1),
-#        ] + sans("Abcd")),
-#        boxmodel.Caret(None, 1),
-#        boxmodel.hpack(sans("AbCD", 80)),
-#        boxmodel.Caret(None, 2),
-#        boxmodel.hpack(sans("Hello ^", 32)),
-#        boxmodel.Caret(None, 3),
-#    ])
 
 #pygame.display.init()
 #pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLEBUFFERS, 1)
@@ -164,7 +143,6 @@ def burst(vertices, subj, x, y):
                 x0 += node.width
             elif isinstance(node, boxmodel.Caret):
                 node.rect = x0-0.5, y-subj.depth, 1, subj.height+subj.depth
-                #visual.quad(node.rect, (255, 0, 0, 0.1))
     elif isinstance(subj, boxmodel.VBox):
         y0 = y + subj.height
         for node in subj.contents:
@@ -175,7 +153,6 @@ def burst(vertices, subj, x, y):
                 y0 -= node.height + node.depth
             elif isinstance(node, boxmodel.Caret):
                 node.rect = x, y0-0.5, subj.width, 1
-                #visual.quad(node.rect, (0, 255, 0, 0.1))
 
 def update_characters(t):
     global vertexcount
@@ -582,16 +559,6 @@ def process_event(ev):
             focus.selection = simplify_selection(focus.headpos, focus.tailpos)
     focus.update_hook(focus)
 
-#def pick_nearest(editor, x, y):
-#    def nearest(node):
-#        dx, dy = delta_point_rect(cursor, node.rect)
-#        return dx**2 + dy**4
-#    try:
-#        node = min((node for node in editor.rootbox.traverse() if is_hcaret(node)), key=nearest)
-#    except ValueError as v:
-#        return
-#    return node
-
 def pick_nearest(editor, x, y):
     def nearest(node, maxdist):
         near, distance = None, maxdist
@@ -642,10 +609,6 @@ def paint(t):
     glDisableVertexAttribArray(i_position)
     glDisableVertexAttribArray(i_texcoord)
 
-    #visual.quad((150+90*math.sin(t), 300, 50, 30), (0, 0.4, 0.9, 0.2))
-    #visual.quad((155, 290, 50, 30), (0, 0.4, 0.9, 0.2))
-    #visual.quad((150, 280, 50, 30), (0, 0.4, 0.9, 0.2))
-
     update_cursor(t)
 
     visual.render(screen)
@@ -658,19 +621,3 @@ while live:
             live = False
     paint(time.time())
     pygame.display.flip()
-
-#live = True
-#crash = False
-#while live:
-#    try:
-#        poll(crash)
-#        for ev in pygame.event.get():
-#            process_event(ev)
-#            if ev.type == pygame.QUIT:
-#                live = False
-#        paint(time.time())
-#        pygame.display.flip()
-#        crash = False
-#    except Exception as exc:
-#        traceback.print_exc()
-#        crash = True
