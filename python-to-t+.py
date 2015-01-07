@@ -65,9 +65,9 @@ def translate_expr(expr):
         for kw in expr.keywords:
             arglist.append(Node("", u"keyword", [unicode(kw.arg), translate_expr(kw.value)]))
         if expr.starargs is not None:
-            arglist.append(Node("", u"vararg", translate_expr(arguments.starargs)))
+            arglist.append(Node("", u"vararg", translate_expr(expr.starargs)))
         if expr.kwargs is not None:
-            arglist.append(Node("", u"kwarg", translate_expr(arguments.kwargs)))
+            arglist.append(Node("", u"kwarg", translate_expr(expr.kwargs)))
         return Node("", u"", arglist)
     elif isinstance(expr, ast.Attribute):
         return Node("", u"attr", [translate_expr(expr.value), unicode(expr.attr)])
@@ -124,5 +124,5 @@ if __name__=='__main__':
         for stmt in root.body:
             contents.append(translate_stmt(stmt))
         filename = os.path.splitext(filename)[0] + '.t+'
-        with open(filename, 'w') as fd:
+        with open(filename, 'wb') as fd:
             textended.dump(contents, fd)
