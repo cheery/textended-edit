@@ -14,7 +14,7 @@ def translate_arguments(arguments):
     if arguments.kwarg is not None:
         arglist.append(Node("", u"kwarg", unicode(arguments.kwarg)))
     if len(arguments.defaults) > 0:
-        return Node("", u"error", u"{}".format(expr))
+        return Node("", u"error", u"{}".format(arguments))
     return Node("", u"", arglist)
 
 def translate_expr(expr):
