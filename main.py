@@ -63,7 +63,8 @@ editor.build_rootbox = defaultlayout.build_boxmodel
 #pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLEBUFFERS, 1)
 #pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLESAMPLES, 8)
 
-screen = pygame.display.set_mode((640, 480), pygame.DOUBLEBUF | pygame.OPENGL)
+screen_flags = pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE
+screen = pygame.display.set_mode((640, 480), screen_flags)
 editor.width, editor.height = screen.get_size()
 editor.x += 10
 editor.y += 10
@@ -580,7 +581,8 @@ def pick_nearest(editor, x, y):
     return nearest(editor.rootbox, 500**4)[0]
 
 def paint(t):
-    glClearColor(0.8, 0.8, 0.8, 1)
+    #272822
+    glClearColor(0x27/255.0, 0x28/255.0, 0x22/255.0, 1)
     glClear(GL_COLOR_BUFFER_BIT)
 
     update_characters(t)
@@ -593,7 +595,7 @@ def paint(t):
     glUniform2f(loc, *screen.get_size())
 
     loc = glGetUniformLocation(shader, "color")
-    glUniform4f(loc, 0, 0, 0, 0.9)
+    glUniform4f(loc, 1, 1, 1, 0.9)
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo)
 
@@ -617,6 +619,11 @@ live = True
 while live:
     for ev in pygame.event.get():
         process_event(ev)
+        if ev.type == pygame.VIDEORESIZE:
+            screen = pygame.display.set_mode(ev.size, screen_flags)
+            glViewport(0, 0, ev.w, ev.h)
+            editor.width, editor.height = screen.get_size()
+            editor.ver = 0
         if ev.type == pygame.QUIT:
             live = False
     paint(time.time())
