@@ -460,24 +460,6 @@ def evaluate_document(document):
             return
     exec compile(ast.Module(statements), "t+", 'exec')
 
-modifiers = {
-    KMOD_LSHIFT:  'left shift',
-    KMOD_RSHIFT:  'right shift',
-    KMOD_LCTRL:  'left ctrl',
-    KMOD_RCTRL:  'right ctrl',
-    KMOD_LALT:   'left alt',
-    KMOD_RALT:   'right alt',
-    KMOD_LGUI:  'left gui',
-    KMOD_RGUI:  'right gui',
-    KMOD_ALT:   'alt',
-    KMOD_NUM:   'num',
-    KMOD_CAPS:  'caps',
-    KMOD_MODE:  'mode',
-    KMOD_SHIFT: 'shift',
-    KMOD_CTRL:  'ctrl',
-    KMOD_GUI:   'gui',
-}
-
 cursor_tail = None
 alt_pressed = False
 def process_event(ev):
@@ -515,13 +497,6 @@ def process_event(ev):
             fall_before(sel)
         elif text == ')':
             fall_after(sel)
-        else:
-            if sel.subj.type in ('string', 'symbol', 'binary'):
-                sel.put(text)
-            elif sel.subj.type == 'list':
-                node = dom.Symbol(text)
-                sel.put([node])
-                sel = focus.selection = Selection.bottom(node)
 
     elif ev.type == SDL_KEYDOWN:
         mod = ev.key.keysym.mod
@@ -671,6 +646,25 @@ def paint(t):
 
     visual.render(width, height)
 
+
+modifiers = {
+    KMOD_LSHIFT:  'left shift',
+    KMOD_RSHIFT:  'right shift',
+    KMOD_LCTRL:  'left ctrl',
+    KMOD_RCTRL:  'right ctrl',
+    KMOD_LALT:   'left alt',
+    KMOD_RALT:   'right alt',
+    KMOD_LGUI:  'left gui',
+    KMOD_RGUI:  'right gui',
+    KMOD_ALT:   'alt',
+    KMOD_NUM:   'num',
+    KMOD_CAPS:  'caps',
+    KMOD_MODE:  'mode',
+    KMOD_SHIFT: 'shift',
+    KMOD_CTRL:  'ctrl',
+    KMOD_GUI:   'gui',
+}
+
 class KeyboardStream(object):
     def __init__(self):
         self.name = None
@@ -702,6 +696,9 @@ class KeyboardStream(object):
             yield key
         self.pending[:] = ()
 
+import keybindings
+
+mode = keybindings.insert
 keyboard = KeyboardStream()
 event = SDL_Event()
 live = True
@@ -728,7 +725,19 @@ while live:
         else:
             keyboard.push_event(event)
 
-    for key in keyboard:
-        print key
+    for key, mod, text in keyboard:
+        key_event = keybindings.KeyEvent(mode, focus, key, mod, text)
+        valid = [binding for binding in mode.bindings if binding(key_event)]
+        if len(valid) > 1:
+            print "more than one keybinding"
+        elif len(valid) == 1:
+            valid[0](key_event)
+        elif mode.default is not None:
+            mode.default(key_event)
+
+        if key_event.mode is mode:
+            mode = key_event.mode
+        elif mode.transition is not None:
+            mode = mode.transition
     paint(time.time())
     SDL_GL_SwapWindow(window)
