@@ -33,7 +33,7 @@ class Mode(object):
 insert = Mode('insert')
 node_insert = Mode('node insert', transition=insert)
 
-def insert_text(event):
+def insert_default(event):
     if event.text is None:
         print event.key
         return
