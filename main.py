@@ -508,6 +508,7 @@ def process_event(ev):
     elif ev.type == SDL_KEYDOWN:
         mod = ev.key.keysym.mod
         sym = ev.key.keysym.sym
+        name = SDL_GetKeyName(ev.key.keysym.sym)
 
         if alt_pressed and sym == SDLK_LALT:
             label_editor(focus, sel)
