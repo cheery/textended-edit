@@ -8,7 +8,7 @@ def load(path):
         fontspec = fd.read()
 
     info = re.search(r"^info .*size=([0-9]+).*padding=([0-9]+),([0-9]+),([0-9]+),([0-9]+)", fontspec, re.M)
-    common = re.search(r"^common .*lineHeight=([0-9]+).*base=([0-9]+)", fontspec, re.M)
+    common = re.search(r"^common .*lineHeight=([0-9]+).*base=([0-9]+).*scaleW=([0-9]+).*scaleH=([0-9]+)", fontspec, re.M)
     page = re.search(r'^page .*file="([^"]*)"', fontspec, re.M)
 
     filename = page.group(1)
@@ -20,12 +20,10 @@ def load(path):
     #width, height = image.get_size()
 
     font = Font()
-    font.image = image
-    font.width = width
-    font.height = height
+    font.filename = filename
 
     font.size, p0, p1, p2, p3 = map(int, info.groups())
-    font.line_height, font.base = map(int, common.groups())
+    font.line_height, font.base, font.width, font.height = map(int, common.groups())
     font.padding = p0, p1, p2, p3
 
     characters = {}

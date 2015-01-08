@@ -21,6 +21,7 @@ import dom
 from dom import Position, Selection
 from ctypes import c_int, byref, c_char, POINTER, c_void_p
 from sdl2 import *
+from sdl2.sdlimage import *
 
 class Editor(object):
     def __init__(self, document, selection, x=0, y=0, width=200, height=200):
@@ -98,13 +99,16 @@ sans = defaultlayout.sans#font.load('OpenSans.fnt')
 
 #data = pygame.image.tostring(sans.image, "RGBA", 1)
 
-image = SDL_ConvertSurfaceFormat(sans.image, SDL_PIXELFORMAT_RGBA8888, 0)
+image = IMG_Load(sans.filename.encode('utf-8'))
+#image = pygame.image.load(page.group(1))
+#width, height = image.get_size()
+#image = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0)
 
 texture = glGenTextures(1)
 glBindTexture(GL_TEXTURE_2D, texture)
 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-ptr = c_void_p(sans.image.contents.pixels)
+ptr = c_void_p(image.contents.pixels)
 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.contents.w, image.contents.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptr)
 
 SDL_FreeSurface(image)
