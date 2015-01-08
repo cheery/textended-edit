@@ -1,4 +1,4 @@
-import os.path, re, pygame
+import os.path, re#, pygame
 from boxmodel import LetterBox, Glue, Caret
 
 def load(path):
@@ -7,19 +7,13 @@ def load(path):
         fontspec = fd.read()
 
     info = re.search(r"^info .*size=([0-9]+).*padding=([0-9]+),([0-9]+),([0-9]+),([0-9]+)", fontspec, re.M)
-    common = re.search(r"^common .*lineHeight=([0-9]+).*base=([0-9]+)", fontspec, re.M)
+    common = re.search(r"^common .*lineHeight=([0-9]+).*base=([0-9]+).*scaleW=([0-9]+).*scaleH=([0-9]+)", fontspec, re.M)
     page = re.search(r'^page .*file="([^"]*)"', fontspec, re.M)
 
-    image = pygame.image.load(page.group(1))
-    width, height = image.get_size()
-
     font = Font()
-    font.image = image
-    font.width = width
-    font.height = height
-
+    font.filename = page.group(1)
     font.size, p0, p1, p2, p3 = map(int, info.groups())
-    font.line_height, font.base = map(int, common.groups())
+    font.line_height, font.base, font.width, font.height = map(int, common.groups())
     font.padding = p0, p1, p2, p3
 
     characters = {}
@@ -31,13 +25,13 @@ def load(path):
         characters[options['id']] = options
         options['texcoords'] = (
             float(options['x']) / width,
-            1 - float(options['y'] + options['height']) / height,
+            float(options['y'] + options['height']) / height,
             float(options['x'] + options['width']) / width,
-            1 - float(options['y']) / height)
+            float(options['y']) / height)
         options['s0'] = float(options['x']) / width
         options['s1'] = float(options['x'] + options['width']) / width
-        options['t0'] = 1 - float(options['y'] + options['height']) / height
-        options['t1'] = 1 - float(options['y']) / height
+        options['t0'] = float(options['y'] + options['height']) / height
+        options['t1'] = float(options['y']) / height
     font.characters = characters
     kernings = {}
     for data in re.findall(r"^kerning +(.*) +$", fontspec, re.M):

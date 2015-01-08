@@ -1,4 +1,4 @@
-import pygame
+#import pygame
 import gate
 import sys
 import traceback
@@ -11,14 +11,17 @@ import renderers
 import tempfile
 import layout
 import os
-import defaultlayout
 import ast
+import defaultlayout
 from OpenGL.GL import *
 from OpenGL.GL import shaders
 from ctypes import c_void_p
 from collections import defaultdict
 import dom
 from dom import Position, Selection
+from ctypes import c_int, byref, c_char, POINTER, c_void_p
+from sdl2 import *
+from sdl2.sdlimage import *
 
 class Editor(object):
     def __init__(self, document, selection, x=0, y=0, width=200, height=200):
@@ -54,18 +57,33 @@ def create_editor():
     editor = Editor(document, selection)
     return editor
 
+SDL_Init(SDL_INIT_VIDEO)
+
 editor = create_editor()
 focus = editor
 
 editor.build_rootbox = defaultlayout.build_boxmodel
 
-#pygame.display.init()
-#pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLEBUFFERS, 1)
-#pygame.display.gl_set_attribute(pygame.GL_MULTISAMPLESAMPLES, 8)
+#screen_flags = pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE
+#screen = pygame.display.set_mode((640, 480), screen_flags)
+#editor.width, editor.height = screen.get_size()
 
-screen_flags = pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE
-screen = pygame.display.set_mode((640, 480), screen_flags)
-editor.width, editor.height = screen.get_size()
+SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)
+window = SDL_CreateWindow(b"textended-edit",
+                          SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                          640, 480, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE)
+context = SDL_GL_CreateContext(window)
+SDL_StartTextInput()
+
+width = c_int()
+height = c_int()
+SDL_GetWindowSize(window, byref(width), byref(height))
+width = width.value
+height = height.value
+
+editor.width = width
+editor.height = height
+
 editor.x += 10
 editor.y += 10
 editor.width  -= 20
@@ -79,12 +97,21 @@ glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
 sans = defaultlayout.sans#font.load('OpenSans.fnt')
 
-data = pygame.image.tostring(sans.image, "RGBA", 1)
+#data = pygame.image.tostring(sans.image, "RGBA", 1)
+
+image = IMG_Load(sans.filename.encode('utf-8'))
+#image = pygame.image.load(page.group(1))
+#width, height = image.get_size()
+#image = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0)
+
 texture = glGenTextures(1)
 glBindTexture(GL_TEXTURE_2D, texture)
 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sans.width, sans.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data)
+ptr = c_void_p(image.contents.pixels)
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.contents.w, image.contents.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptr)
+
+SDL_FreeSurface(image)
 
 vertex = shaders.compileShader("""
 attribute vec2 position;
@@ -171,6 +198,7 @@ def update_characters(t):
         glBindBuffer(GL_ARRAY_BUFFER, vbo)
         glBufferData(GL_ARRAY_BUFFER, vertices, GL_STREAM_DRAW)
         editor.ver = editor.document.ver
+
 
 def delta_point_rect(point, rect):
     x0, y0 = point
@@ -439,23 +467,74 @@ def process_event(ev):
     document = focus.document
     sel = focus.selection
 
-    if ev.type == pygame.KEYDOWN:
-        if alt_pressed and ev.key == pygame.K_LALT:
+    if ev.type == SDL_TEXTINPUT:
+        text = ev.text.text.decode('utf-8')
+        if text == ' ' and sel.subj.type not in ('string', 'binary'):
+            if sel.subj.type == 'symbol':
+                slit(sel)
+        elif text == "'":
+            slit(sel)
+            subj = dom.Literal("", u"", [])
+            sel.put([subj])
+            sel.subj = subj
+            sel.head = sel.tail = 0
+            sel.x_anchor = None
+        elif text == '"':
+            slit(sel)
+            subj = dom.Literal("", u"", u"")
+            sel.put([subj])
+            sel.subj = subj
+            sel.head = sel.tail = 0
+            sel.x_anchor = None
+        elif text == '#':
+            slit(sel)
+            subj = dom.Literal("", u"", "")
+            sel.put([subj])
+            sel.subj = subj
+            sel.head = sel.tail = 0
+            sel.x_anchor = None
+        elif text == '(':
+            fall_before(sel)
+        elif text == ')':
+            fall_after(sel)
+        else:
+            if sel.subj.type in ('string', 'symbol', 'binary'):
+                sel.put(text)
+            elif sel.subj.type == 'list':
+                node = dom.Symbol(text)
+                sel.put([node])
+                sel = focus.selection = Selection.bottom(node)
+
+    elif ev.type == SDL_KEYDOWN:
+        mod = ev.key.keysym.mod
+        sym = ev.key.keysym.sym
+        name = SDL_GetKeyName(ev.key.keysym.sym)
+
+        if alt_pressed and sym == SDLK_LALT:
             label_editor(focus, sel)
         alt_pressed = False
 
-        ctrl = (ev.mod & pygame.KMOD_CTRL) != 0
-        shift = (ev.mod & pygame.KMOD_SHIFT) != 0
-        if ev.key == pygame.K_ESCAPE:
+        ctrl = mod & KMOD_CTRL != 0
+        shift = mod & KMOD_SHIFT != 0
+
+        if sym == SDLK_BACKSPACE:
+            if sel.head == sel.tail and sel.head > 0:
+                sel.head -= 1
+            sel.drop()
+        elif sym == SDLK_DELETE:
+            if sel.head == sel.tail and sel.head < len(sel.subj):
+                sel.head += 1
+            sel.drop()
+        elif sym == SDLK_ESCAPE:
             if focus != editor:
                 focus.close_hook(focus)
                 editor.children.remove(focus)
                 focus = editor
             else:
                 live = False
-        elif ev.key == pygame.K_F5:
+        elif sym == SDLK_F5:
             evaluate_document(document)
-        elif ev.key == pygame.K_LEFT:
+        elif sym == SDLK_LEFT:
             if sel.head > 0:
                 if sel.subj.type == 'list':
                     sel = focus.selection = Selection.bottom(sel.subj[sel.head-1])
@@ -465,7 +544,7 @@ def process_event(ev):
                     sel.x_anchor = None
             else:
                 sel = focus.selection = fall_left_leaf(sel.subj)
-        elif ev.key == pygame.K_RIGHT:
+        elif sym == SDLK_RIGHT:
             if sel.head < len(sel.subj):
                 if sel.subj.type == 'list':
                     sel = focus.selection = Selection.top(sel.subj[sel.head])
@@ -475,19 +554,19 @@ def process_event(ev):
                     sel.x_anchor = None
             else:
                 sel = focus.selection = fall_right_leaf(sel.subj)
-        elif ev.key == pygame.K_UP:
+        elif sym == SDLK_UP:
             navigate(focus, sel, hcarets_above)
-        elif ev.key == pygame.K_DOWN:
+        elif sym == SDLK_DOWN:
             navigate(focus, sel, hcarets_below)
-        elif ev.key == pygame.K_LALT:
+        elif sym == SDLK_LALT:
             alt_pressed = True
-        elif ctrl and ev.key == pygame.K_s and (document.filename is not None):
+        elif ctrl and sym == SDLK_s and (document.filename is not None):
             dom.save(document.filename, document.body)
-        elif ctrl and ev.key == pygame.K_x:
+        elif ctrl and sym == SDLK_x:
             document.copybuf = sel.drop()
-        elif ctrl and ev.key == pygame.K_c:
+        elif ctrl and sym == SDLK_c:
             document.copybuf = sel.yank()
-        elif ctrl and ev.key == pygame.K_v and (document.copybuf is not None):
+        elif ctrl and sym == SDLK_v and (document.copybuf is not None):
             if sel.subj.type == 'list' and isinstance(document.copybuf, list):
                 sel.put(document.copybuf)
             if sel.subj.type == 'symbol' and isinstance(document.copybuf, unicode):
@@ -496,61 +575,18 @@ def process_event(ev):
                 sel.put(document.copybuf)
             if sel.subj.type == 'binary' and isinstance(document.copybuf, str):
                 sel.put(document.copybuf)
-        elif ev.unicode == '\x08':
-            if sel.head == sel.tail and sel.head > 0:
-                sel.head -= 1
-            sel.drop()
-        elif ev.unicode == '\x7f':
-            if sel.head == sel.tail and sel.head < len(sel.subj):
-                sel.head += 1
-            sel.drop()
-        elif ev.unicode == ' ' and sel.subj.type not in ('string', 'binary'):
-            if sel.subj.type == 'symbol':
-                slit(sel)
-        elif ev.unicode == "'":
-            slit(sel)
-            subj = dom.Literal("", u"", [])
-            sel.put([subj])
-            sel.subj = subj
-            sel.head = sel.tail = 0
-            sel.x_anchor = None
-        elif ev.unicode == '"':
-            slit(sel)
-            subj = dom.Literal("", u"", u"")
-            sel.put([subj])
-            sel.subj = subj
-            sel.head = sel.tail = 0
-            sel.x_anchor = None
-        elif ev.unicode == '#':
-            slit(sel)
-            subj = dom.Literal("", u"", "")
-            sel.put([subj])
-            sel.subj = subj
-            sel.head = sel.tail = 0
-            sel.x_anchor = None
-        elif ev.unicode == '(':
-            fall_before(sel)
-        elif ev.unicode == ')':
-            fall_after(sel)
-        elif len(ev.unicode) > 0:
-            if sel.subj.type in ('string', 'symbol', 'binary'):
-                sel.put(ev.unicode)
-            elif sel.subj.type == 'list':
-                node = dom.Symbol(ev.unicode)
-                sel.put([node])
-                sel = focus.selection = Selection.bottom(node)
-    if ev.type == pygame.MOUSEMOTION:
-        cursor[0] = ev.pos[0]
-        cursor[1] = screen.get_height() - ev.pos[1]
-        if not any(ev.buttons):
+    if ev.type == SDL_MOUSEMOTION:
+        cursor[0] = ev.motion.x
+        cursor[1] = height - ev.motion.y
+        if ev.motion.state == 0:
             cursor_tail = None
         if cursor_tail is not None:
-            node = pick_nearest(focus, *ev.pos)
+            node = pick_nearest(focus, ev.motion.x, ev.motion.y)
             if node is not None:
                 focus.headpos = Position(node.subj, node.index)
                 focus.selection = simplify_selection(focus.headpos, focus.tailpos)
-    if ev.type == pygame.MOUSEBUTTONDOWN:
-        node = pick_nearest(focus, *ev.pos)
+    if ev.type == SDL_MOUSEBUTTONDOWN:
+        node = pick_nearest(focus, ev.button.x, ev.button.y)
         if node is not None:
             sel.subj = node.subj
             sel.head = sel.tail = node.index
@@ -592,7 +628,7 @@ def paint(t):
     glUniform1f(loc, sans.size * 0.8)
 
     loc = glGetUniformLocation(shader, "resolution")
-    glUniform2f(loc, *screen.get_size())
+    glUniform2f(loc, width, height)
 
     loc = glGetUniformLocation(shader, "color")
     glUniform4f(loc, 1, 1, 1, 0.9)
@@ -613,18 +649,24 @@ def paint(t):
 
     update_cursor(t)
 
-    visual.render(screen)
+    visual.render(width, height)
 
+event = SDL_Event()
 live = True
 while live:
-    for ev in pygame.event.get():
-        process_event(ev)
-        if ev.type == pygame.VIDEORESIZE:
-            screen = pygame.display.set_mode(ev.size, screen_flags)
-            glViewport(0, 0, ev.w, ev.h)
-            editor.width, editor.height = screen.get_size()
-            editor.ver = 0
-        if ev.type == pygame.QUIT:
+    while SDL_PollEvent(byref(event)) != 0:
+        if event.type == SDL_QUIT:
             live = False
+        elif event.type == SDL_WINDOWEVENT:
+            if event.window.event == SDL_WINDOWEVENT_RESIZED:
+                width = event.window.data1
+                height = event.window.data2
+
+                glViewport(0, 0, width, height)
+                editor.width = width
+                editor.height = height
+                editor.ver = 0
+        else:
+            process_event(event)
     paint(time.time())
-    pygame.display.flip()
+    SDL_GL_SwapWindow(window)

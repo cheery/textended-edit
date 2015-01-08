@@ -38,7 +38,7 @@ class Visual(object):
         self.vertex(x+w, y+h, r, g, b, a)
         self.vertex(x, y+h, r, g, b, a)
 
-    def render(self, screen):
+    def render(self, width, height):
         if len(self.vertices) == 0:
             return
         glUseProgram(self.shader)
@@ -49,7 +49,7 @@ class Visual(object):
         glBufferData(GL_ARRAY_BUFFER, vertices, GL_STREAM_DRAW)
 
         loc = glGetUniformLocation(self.shader, "resolution")
-        glUniform2f(loc, *screen.get_size())
+        glUniform2f(loc, width, height)
 
         stride = 6*4
 
