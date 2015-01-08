@@ -39,6 +39,8 @@ class Editor(object):
         self.close_hook = lambda editor: None
         self.filename = None
         self.copybuf = None
+        self.scroll_x = 0
+        self.scroll_y = 0
 
 module = sys.modules[__name__]
 
@@ -118,11 +120,12 @@ attribute vec2 position;
 attribute vec2 texcoord;
 
 uniform vec2 resolution;
+uniform vec2 scroll;
 
 varying vec2 v_texcoord;
 void main() {
     v_texcoord = texcoord;
-    gl_Position = vec4(position / resolution * 2.0 - 1.0, 0.0, 1.0);
+    gl_Position = vec4((position - scroll) / resolution * 2.0 - 1.0, 0.0, 1.0);
 }""", GL_VERTEX_SHADER)
 fragment = shaders.compileShader("""
 uniform sampler2D texture;
@@ -625,6 +628,9 @@ def paint(t):
     loc = glGetUniformLocation(shader, "resolution")
     glUniform2f(loc, width, height)
 
+    loc = glGetUniformLocation(shader, "scroll")
+    glUniform2f(loc, editor.scroll_x, editor.scroll_y)
+
     loc = glGetUniformLocation(shader, "color")
     glUniform4f(loc, 1, 1, 1, 0.9)
 
@@ -644,7 +650,7 @@ def paint(t):
 
     update_cursor(t)
 
-    visual.render(width, height)
+    visual.render(editor.scroll_x, editor.scroll_y, width, height)
 
 
 modifiers = {
@@ -731,7 +737,7 @@ while live:
         if len(valid) > 1:
             print "more than one keybinding"
         elif len(valid) == 1:
-            valid[0](key_event)
+            valid[0].action(key_event)
         elif mode.default is not None:
             mode.default(key_event)
 

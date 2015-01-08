@@ -7,11 +7,12 @@ attribute vec2 position;
 attribute vec4 color;
 
 uniform vec2 resolution;
+uniform vec2 scroll;
 
 varying vec4 v_color;
 void main() {
     v_color = color;
-    gl_Position = vec4(position / resolution * 2.0 - 1.0, 0.0, 1.0);
+    gl_Position = vec4((position - scroll) / resolution * 2.0 - 1.0, 0.0, 1.0);
 }"""
 visual_fragment_shader = """
 varying vec4 v_color;
@@ -38,7 +39,7 @@ class Visual(object):
         self.vertex(x+w, y+h, r, g, b, a)
         self.vertex(x, y+h, r, g, b, a)
 
-    def render(self, width, height):
+    def render(self, scroll_x, scroll_y, width, height):
         if len(self.vertices) == 0:
             return
         glUseProgram(self.shader)
@@ -50,6 +51,9 @@ class Visual(object):
 
         loc = glGetUniformLocation(self.shader, "resolution")
         glUniform2f(loc, width, height)
+
+        loc = glGetUniformLocation(self.shader, "scroll")
+        glUniform2f(loc, scroll_x, scroll_y)
 
         stride = 6*4
 

@@ -34,6 +34,9 @@ insert = Mode('insert')
 node_insert = Mode('node insert', transition=insert)
 
 def insert_text(event):
+    if event.text is None:
+        print event.key
+        return
     selection = event.editor.selection
     if selection.subj.type in ('string', 'symbol', 'binary'):
         selection.put(event.text)
@@ -46,3 +49,11 @@ insert.default = insert_text
 @insert.key('left alt')
 def insert_left_alt(event):
     event.mode = node_insert
+
+@insert.key('pageup')
+def insert_page_up(event):
+    event.editor.scroll_y += event.editor.height / 2
+
+@insert.key('pagedown')
+def insert_page_down(event):
+    event.editor.scroll_y -= event.editor.height / 2
