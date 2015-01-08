@@ -16,6 +16,9 @@ def load(path):
     font.line_height, font.base, font.width, font.height = map(int, common.groups())
     font.padding = p0, p1, p2, p3
 
+    width = font.width
+    height = font.height
+
     characters = {}
     for data in re.findall(r"^char +(.*) +$", fontspec, re.M):
         options = dict()

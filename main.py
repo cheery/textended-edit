@@ -460,6 +460,24 @@ def evaluate_document(document):
             return
     exec compile(ast.Module(statements), "t+", 'exec')
 
+modifiers = {
+    KMOD_LSHIFT:  'left shift',
+    KMOD_RSHIFT:  'right shift',
+    KMOD_LCTRL:  'left ctrl',
+    KMOD_RCTRL:  'right ctrl',
+    KMOD_LALT:   'left alt',
+    KMOD_RALT:   'right alt',
+    KMOD_LGUI:  'left gui',
+    KMOD_RGUI:  'right gui',
+    KMOD_ALT:   'alt',
+    KMOD_NUM:   'num',
+    KMOD_CAPS:  'caps',
+    KMOD_MODE:  'mode',
+    KMOD_SHIFT: 'shift',
+    KMOD_CTRL:  'ctrl',
+    KMOD_GUI:   'gui',
+}
+
 cursor_tail = None
 alt_pressed = False
 def process_event(ev):
@@ -508,7 +526,9 @@ def process_event(ev):
     elif ev.type == SDL_KEYDOWN:
         mod = ev.key.keysym.mod
         sym = ev.key.keysym.sym
-        name = SDL_GetKeyName(ev.key.keysym.sym)
+        name = SDL_GetKeyName(ev.key.keysym.sym).lower()
+
+        mods = set(name for flag, name in modifiers.items() if mod & flag != 0)
 
         if alt_pressed and sym == SDLK_LALT:
             label_editor(focus, sel)
@@ -651,10 +671,43 @@ def paint(t):
 
     visual.render(width, height)
 
+class KeyboardStream(object):
+    def __init__(self):
+        self.name = None
+        self.mods = None
+        self.text = None
+        self.pending = []
+
+    def flush(self):
+        if self.name is not None:
+            self.pending.append((self.name, self.mods, self.text))
+            self.name = None
+            self.mods = None
+            self.text = None
+
+    def push_event(self, ev):
+        if ev.type == SDL_TEXTINPUT:
+            self.text = ev.text.text.decode('utf-8')
+        if ev.type == SDL_KEYDOWN:
+            sym = ev.key.keysym.sym
+            mod = ev.key.keysym.mod
+            self.flush()
+            self.name = SDL_GetKeyName(sym).decode('utf-8').lower()
+            self.mods = set(name for flag, name in modifiers.items() if mod & flag != 0)
+            self.text = None
+
+    def __iter__(self):
+        self.flush()
+        for key in self.pending:
+            yield key
+        self.pending[:] = ()
+
+keyboard = KeyboardStream()
 event = SDL_Event()
 live = True
 while live:
     while SDL_PollEvent(byref(event)) != 0:
+        process_event(event)
         if event.type == SDL_QUIT:
             live = False
         elif event.type == SDL_WINDOWEVENT:
@@ -666,7 +719,16 @@ while live:
                 editor.width = width
                 editor.height = height
                 editor.ver = 0
+        elif event.type == SDL_MOUSEMOTION:
+            pass
+        elif event.type == SDL_MOUSEBUTTONDOWN:
+            pass
+        elif event.type == SDL_MOUSEBUTTONUP:
+            pass
         else:
-            process_event(event)
+            keyboard.push_event(event)
+
+    for key in keyboard:
+        print key
     paint(time.time())
     SDL_GL_SwapWindow(window)
