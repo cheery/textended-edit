@@ -44,7 +44,7 @@ def insert_default(event):
         node = dom.Symbol(event.text)
         selection.put([node])
         event.editor.selection = dom.Selection.bottom(node)
-insert.default = insert_text
+insert.default = insert_default
 
 @insert.key('left alt')
 def insert_left_alt(event):
