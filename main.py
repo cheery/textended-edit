@@ -434,26 +434,6 @@ def process_event(ev):
             navigate(focus, sel, hcarets_below)
         elif sym == SDLK_LALT:
             alt_pressed = True
-    if ev.type == SDL_MOUSEMOTION:
-        cursor[0] = ev.motion.x
-        cursor[1] = height - ev.motion.y
-        if ev.motion.state == 0:
-            cursor_tail = None
-        if cursor_tail is not None:
-            node = pick_nearest(focus, ev.motion.x, ev.motion.y)
-            if node is not None:
-                focus.headpos = Position(node.subj, node.index)
-                focus.selection = simplify_selection(focus.headpos, focus.tailpos)
-    if ev.type == SDL_MOUSEBUTTONDOWN:
-        node = pick_nearest(focus, ev.button.x, ev.button.y)
-        if node is not None:
-            sel.subj = node.subj
-            sel.head = sel.tail = node.index
-            sel.x_anchor = None
-            cursor_tail = Position(node.subj, node.index)
-            focus.headpos = focus.tailpos = cursor_tail
-            focus.selection = simplify_selection(focus.headpos, focus.tailpos)
-    focus.update_hook(focus)
 
 def pick_nearest(editor, x, y):
     def nearest(node, maxdist):
@@ -584,15 +564,33 @@ while live:
                 editor.height = height
                 editor.ver = 0
         elif event.type == SDL_MOUSEMOTION:
-            pass
+            cursor[0] = event.motion.x
+            cursor[1] = height - event.motion.y
+            if event.motion.state == 0:
+                cursor_tail = None
+            if cursor_tail is not None:
+                node = pick_nearest(focus, event.motion.x, event.motion.y)
+                if node is not None:
+                    focus.headpos = Position(node.subj, node.index)
+                    focus.selection = simplify_selection(focus.headpos, focus.tailpos)
         elif event.type == SDL_MOUSEBUTTONDOWN:
-            pass
+            sel = focus.selection
+            node = pick_nearest(focus, event.button.x, event.button.y)
+            if node is not None:
+                sel.subj = node.subj
+                sel.head = sel.tail = node.index
+                sel.x_anchor = None
+                cursor_tail = Position(node.subj, node.index)
+                focus.headpos = focus.tailpos = cursor_tail
+                focus.selection = simplify_selection(focus.headpos, focus.tailpos)
         elif event.type == SDL_MOUSEBUTTONUP:
             pass
         else:
             keyboard.push_event(event)
 
+    update = False
     for key, mod, text in keyboard:
+        update = True
         key_event = keybindings.KeyEvent(mode, focus, key, mod, text)
         valid = [binding for binding in mode.bindings if binding(key_event)]
         if len(valid) > 1:
@@ -606,5 +604,7 @@ while live:
             mode = key_event.mode
         elif mode.transition is not None:
             mode = mode.transition
+    if update:
+        focus.update_hook(focus)
     paint(time.time())
     SDL_GL_SwapWindow(window)
