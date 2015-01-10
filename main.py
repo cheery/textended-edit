@@ -287,71 +287,6 @@ def update_cursor(t):
             y0 = min(y0, y1)
         visual.quad((x0, y0, x2-x0, y2-y0), color)
 
-def slit(sel):
-    if sel.subj.type == 'list':
-        return
-    if sel.subj.parent is None:
-        return
-    parent = sel.subj.parent
-    pos = parent.index(sel.subj)
-    if sel.head != sel.tail:
-        sel.drop()
-    if sel.head == 0:
-        sel.subj = parent
-        sel.head = sel.tail = pos
-    if sel.head == len(sel.subj):
-        sel.subj = parent
-        sel.head = sel.tail = pos + 1
-    else:
-        contents = sel.subj.drop(sel.head, len(sel.subj))
-        type = sel.subj.type
-        sel.subj = parent
-        sel.head = sel.tail = pos + 1
-        if type == 'symbol':
-            sel.subj.put(sel.head, [dom.Symbol(contents)])
-        else:
-            sel.subj.put(sel.head, [dom.Literal("", u"", contents)])
-
-def fall_before(sel):
-    type = sel.subj.type
-    parent = sel.subj.parent
-    if parent is None:
-        return
-    pos = parent.index(sel.subj)
-    sel.subj = parent
-    sel.head = sel.tail = pos
-    if type != 'list':
-        fall_before(sel)
-
-def fall_after(sel):
-    type = sel.subj.type
-    parent = sel.subj.parent
-    if parent is None:
-        return
-    pos = parent.index(sel.subj) + 1
-    sel.subj = parent
-    sel.head = sel.tail = pos
-    if type != 'list':
-        fall_after(sel)
-
-def fall_left_leaf(node):
-    if node.parent is None:
-        return Selection.top(node)
-    index = node.parent.index(node)
-    if index > 0:
-        return Selection.bottom(node.parent[index - 1])
-    else:
-        return fall_left_leaf(node.parent)
-
-def fall_right_leaf(node):
-    if node.parent is None:
-        return Selection.bottom(node)
-    index = node.parent.index(node) + 1
-    if index < len(node.parent):
-        return Selection.top(node.parent[index])
-    else:
-        return fall_right_leaf(node.parent)
-
 def find_caret(editor, subj, index):
     for frame in editor.rootbox.traverse():
         if isinstance(frame, boxmodel.Caret):
@@ -470,38 +405,7 @@ def process_event(ev):
     document = focus.document
     sel = focus.selection
 
-    if ev.type == SDL_TEXTINPUT:
-        text = ev.text.text.decode('utf-8')
-        if text == ' ' and sel.subj.type not in ('string', 'binary'):
-            if sel.subj.type == 'symbol':
-                slit(sel)
-        elif text == "'":
-            slit(sel)
-            subj = dom.Literal("", u"", [])
-            sel.put([subj])
-            sel.subj = subj
-            sel.head = sel.tail = 0
-            sel.x_anchor = None
-        elif text == '"':
-            slit(sel)
-            subj = dom.Literal("", u"", u"")
-            sel.put([subj])
-            sel.subj = subj
-            sel.head = sel.tail = 0
-            sel.x_anchor = None
-        elif text == '#':
-            slit(sel)
-            subj = dom.Literal("", u"", "")
-            sel.put([subj])
-            sel.subj = subj
-            sel.head = sel.tail = 0
-            sel.x_anchor = None
-        elif text == '(':
-            fall_before(sel)
-        elif text == ')':
-            fall_after(sel)
-
-    elif ev.type == SDL_KEYDOWN:
+    if ev.type == SDL_KEYDOWN:
         mod = ev.key.keysym.mod
         sym = ev.key.keysym.sym
         name = SDL_GetKeyName(ev.key.keysym.sym).lower()
@@ -515,15 +419,7 @@ def process_event(ev):
         ctrl = mod & KMOD_CTRL != 0
         shift = mod & KMOD_SHIFT != 0
 
-        if sym == SDLK_BACKSPACE:
-            if sel.head == sel.tail and sel.head > 0:
-                sel.head -= 1
-            sel.drop()
-        elif sym == SDLK_DELETE:
-            if sel.head == sel.tail and sel.head < len(sel.subj):
-                sel.head += 1
-            sel.drop()
-        elif sym == SDLK_ESCAPE:
+        if sym == SDLK_ESCAPE:
             if focus != editor:
                 focus.close_hook(focus)
                 editor.children.remove(focus)
@@ -532,47 +428,12 @@ def process_event(ev):
                 live = False
         elif sym == SDLK_F5:
             evaluate_document(document)
-        elif sym == SDLK_LEFT:
-            if sel.head > 0:
-                if sel.subj.type == 'list':
-                    sel = focus.selection = Selection.bottom(sel.subj[sel.head-1])
-                else:
-                    sel.head -= 1
-                    sel.tail = sel.head
-                    sel.x_anchor = None
-            else:
-                sel = focus.selection = fall_left_leaf(sel.subj)
-        elif sym == SDLK_RIGHT:
-            if sel.head < len(sel.subj):
-                if sel.subj.type == 'list':
-                    sel = focus.selection = Selection.top(sel.subj[sel.head])
-                else:
-                    sel.head += 1
-                    sel.tail = sel.head
-                    sel.x_anchor = None
-            else:
-                sel = focus.selection = fall_right_leaf(sel.subj)
         elif sym == SDLK_UP:
             navigate(focus, sel, hcarets_above)
         elif sym == SDLK_DOWN:
             navigate(focus, sel, hcarets_below)
         elif sym == SDLK_LALT:
             alt_pressed = True
-        elif ctrl and sym == SDLK_s and (document.filename is not None):
-            dom.save(document.filename, document.body)
-        elif ctrl and sym == SDLK_x:
-            document.copybuf = sel.drop()
-        elif ctrl and sym == SDLK_c:
-            document.copybuf = sel.yank()
-        elif ctrl and sym == SDLK_v and (document.copybuf is not None):
-            if sel.subj.type == 'list' and isinstance(document.copybuf, list):
-                sel.put(document.copybuf)
-            if sel.subj.type == 'symbol' and isinstance(document.copybuf, unicode):
-                sel.put(document.copybuf)
-            if sel.subj.type == 'string' and isinstance(document.copybuf, unicode):
-                sel.put(document.copybuf)
-            if sel.subj.type == 'binary' and isinstance(document.copybuf, str):
-                sel.put(document.copybuf)
     if ev.type == SDL_MOUSEMOTION:
         cursor[0] = ev.motion.x
         cursor[1] = height - ev.motion.y
