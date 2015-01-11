@@ -4,7 +4,8 @@ sans = font.load('OpenSans.fnt')
 fontsize = 10
 fontsize_small = 6
 
-def layout_generic(node):
+def layout_generic(mapping):
+    node = mapping.subj
     if not isinstance(node, dom.Literal):
         return sans(node, fontsize)
     elif isinstance(node.contents, str):
@@ -24,7 +25,7 @@ def layout_generic(node):
             postfix = sans('"', fontsize_small)
         return prefix + sans(node, fontsize_small) + postfix
     else:
-        hmode = layout.HMode(node)
+        hmode = layout.HMode(mapping)
         if len(node.label) > 0:
             hmode.extend(sans(node.label + ':', fontsize_small))
         hmode.extend(sans('[', fontsize_small))
@@ -35,9 +36,10 @@ def layout_generic(node):
         hmode.extend(sans(']', fontsize_small))
         return hmode
 
-def layout_python(node):
+def layout_python(mapping):
+    node = mapping.subj
     if check_literal(node, 'import', 'list'):
-        mode = layout.HMode(node)
+        mode = layout.HMode(mapping)
         mode.extend(sans('import', fontsize))
         for i, subnode in enumerate(node):
             if i > 0:
@@ -47,20 +49,20 @@ def layout_python(node):
             mode(layout_python, subnode)
         return mode
     if check_literal(node, 'attr', 'list') and len(node) == 2:
-        mode = layout.HMode(node)
+        mode = layout.HMode(mapping)
         mode(layout_python, node[0])
         mode.extend(sans(".", fontsize))
         mode(layout_python, node[1])
         return mode
     if check_literal(node, 'assign', 'list'):
-        mode = layout.HMode(node)
+        mode = layout.HMode(mapping)
         for i, node in enumerate(node):
             if i > 0:
                 mode.extend(sans(" = ", fontsize))
             mode(layout_python, node)
         return mode
     if check_literal(node, 'return', 'list'):
-        mode = layout.HMode(node)
+        mode = layout.HMode(mapping)
         mode.extend(sans("return", fontsize))
         for i, node in enumerate(node):
             if i > 0:
@@ -70,19 +72,19 @@ def layout_python(node):
             mode(layout_python, node)
         return mode
     if check_literal(node, 'binop', 'list'):
-        mode = layout.HMode(node)
+        mode = layout.HMode(mapping)
         for i, node in enumerate(node):
             if i > 0:
                 mode.extend(sans(" ", fontsize))
             mode(layout_python, node)
         return mode
     if check_literal(node, 'unaryop', 'list'):
-        mode = layout.HMode(node)
+        mode = layout.HMode(mapping)
         for i, node in enumerate(node):
             mode(layout_python, node)
         return mode
     if check_literal(node, 'if', 'list'):
-        mode = layout.VMode(node)
+        mode = layout.VMode(mapping)
         mode.indent = 10
         mode.append(boxmodel.hpack(sans("if", fontsize)))
         for i, node in enumerate(node):
@@ -91,7 +93,7 @@ def layout_python(node):
             mode(layout_python, node)
         return mode
     if check_literal(node, 'def', 'list'):
-        mode = layout.VMode(node)
+        mode = layout.VMode(mapping)
         mode.indent = 10
         mode.append(boxmodel.hpack(sans("def", fontsize)))
         for i, node in enumerate(node):
@@ -100,21 +102,21 @@ def layout_python(node):
             mode(layout_python, node)
         return mode
     if check_literal(node, 'cond', 'list'):
-        mode = layout.VMode(node)
+        mode = layout.VMode(mapping)
         for i, node in enumerate(node):
             if i > 0:
                 mode.append(boxmodel.hpack(sans('else', fontsize)))
             mode(layout_python, node)
         return mode
     if check_literal(node, "", 'list') and node.parent.label == 'cond':
-        mode = layout.VMode(node)
+        mode = layout.VMode(mapping)
         for i, node in enumerate(node):
             if i > 0:
                 mode.append(boxmodel.Glue(fontsize))
             mode(layout_python, node)
         return mode
     if check_literal(node, "", 'list'):
-        hmode = layout.HMode(node)
+        hmode = layout.HMode(mapping)
         for i, subnode in enumerate(node):
             if i == 1:
                 hmode.extend(sans('(', fontsize))
@@ -130,10 +132,21 @@ def layout_python(node):
         prefix = sans('"', fontsize)
         postfix = sans('"', fontsize)
         return prefix + sans(node, fontsize) + postfix
-    return layout_generic(node)
+    return layout_generic(mapping)
 
 def check_literal(node, label, type):
     return isinstance(node, dom.Literal) and node.label == label and node.type == type
+
+class Mapping(object):
+    __slots__ = ['frames', 'subj', 'obj']
+    def __init__(self, frames, subj):
+        self.frames = frames
+        self.subj = subj
+        self.obj = None
+
+    def submapping(self, node):
+        self.frames[node] = mapping = Mapping(self.frames, node)
+        return mapping
 
 def build_boxmodel(editor):
     body = editor.document.body
@@ -144,7 +157,10 @@ def build_boxmodel(editor):
 
     if body.type != 'list':
         return boxmodel.hpack(sans(body, fontsize))
-    mode = layout.VMode(body)
+
+    editor.frames[body] = mapping = Mapping(editor.frames, body)
+
+    mode = layout.VMode(mapping)
     for i, node in enumerate(body):
         if i > 0:
             mode.append(boxmodel.Glue(fontsize))

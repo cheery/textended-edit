@@ -1,4 +1,6 @@
 import dom
+import tpython
+import boxmodel
 
 class KeyEvent(object):
     def __init__(self, mode, editor, key, mods, text):
@@ -238,3 +240,77 @@ def paste_document(event):
             sel.put(document.copybuf)
         elif sel.subj.type == 'binary' and isinstance(document.copybuf, str):
             sel.put(document.copybuf)
+
+@insert.key('f5')
+def evaluate_document(event):
+    tpython.evaluate_document(event.editor.document)
+
+@insert.key('up')
+def insert_up(event):
+    navigate(event.editor, event.editor.selection, hcarets_above)
+
+@insert.key('down')
+def insert_down(event):
+    navigate(event.editor, event.editor.selection, hcarets_below)
+
+def navigate(editor, sel, hcarets_fn):
+    caret = find_caret(editor, sel.subj, sel.head)
+    if caret is None:
+        return
+    if sel.x_anchor is None:
+        sel.x_anchor = caret.rect[0]
+    def nearest(node):
+        x,y,w,h = node.rect
+        return abs(x - sel.x_anchor)
+    try:
+        node = min(hcarets_fn(caret), key=nearest)
+    except ValueError as v:
+        return
+    else:
+        sel.subj = node.subj
+        sel.head = sel.tail = node.index
+
+def find_caret(editor, subj, index):
+    for frame in editor.rootbox.traverse():
+        if isinstance(frame, boxmodel.Caret):
+            if frame.subj == subj and frame.index == index:
+                return frame
+
+def hcarets_above(node):
+    parent = node.parent
+    success = False
+    while parent is not None:
+        if isinstance(parent, boxmodel.VBox):
+            index = parent.index(node)
+            for item in reversed(parent[:index]):
+                for subnode in item.traverse():
+                    if is_hcaret(subnode):
+                        yield subnode
+                        success = True
+                if success:
+                    return
+        node   = parent
+        parent = node.parent
+
+def hcarets_below(node):
+    parent = node.parent
+    success = False
+    while parent is not None:
+        if isinstance(parent, boxmodel.VBox):
+            index = parent.index(node)
+            for item in parent[index+1:]:
+                for subnode in item.traverse():
+                    if is_hcaret(subnode):
+                        yield subnode
+                        success = True
+                if success:
+                    return
+        node   = parent
+        parent = node.parent
+
+def is_hcaret(node):
+    if isinstance(node, boxmodel.Caret):
+        if not isinstance(node.subj, dom.Node):
+            return
+        if node.subj.type != 'list' or len(node.subj) == 0:
+            return isinstance(node.parent, boxmodel.HBox)

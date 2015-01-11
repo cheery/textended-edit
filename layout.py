@@ -4,9 +4,10 @@ class Mode(object):
     pass
 
 class HMode(Mode):
-    def __init__(self, subj):
-        self.subj = subj
-        self.contents = [boxmodel.Caret(subj, 0)]
+    def __init__(self, mapping):
+        self.mapping = mapping
+        self.subj = mapping.subj
+        self.contents = [boxmodel.Caret(mapping.subj, 0)]
 
     def append(self, frame):
         self.contents.append(frame)
@@ -16,7 +17,8 @@ class HMode(Mode):
 
     def __call__(self, func, node):
         index = self.subj.contents.index(node)
-        resp = func(node)
+        submapping = self.mapping.submapping(node)
+        submapping.obj = resp = func(submapping)
         if isinstance(resp, Mode):
             resp = resp.freeze()
         self.contents.append(boxmodel.Caret(self.subj, index))
@@ -28,12 +30,15 @@ class HMode(Mode):
 
     def freeze(self):
         self.contents.append(boxmodel.Caret(self.subj, len(self.subj)))
-        return boxmodel.hpack(self.contents)
+        res = boxmodel.hpack(self.contents)
+        self.mapping.obj = res
+        return res
 
 class VMode(Mode):
-    def __init__(self, subj):
-        self.subj = subj
-        self.contents = [boxmodel.Caret(subj, 0)]
+    def __init__(self, mapping):
+        self.mapping = mapping
+        self.subj = mapping.subj
+        self.contents = [boxmodel.Caret(mapping.subj, 0)]
         self.indent = 0
 
     def append(self, frame):
@@ -44,7 +49,8 @@ class VMode(Mode):
 
     def __call__(self, func, node):
         index = self.subj.contents.index(node)
-        resp = func(node)
+        submapping = self.mapping.submapping(node)
+        submapping.obj = resp = func(submapping)
         if isinstance(resp, Mode):
             resp = resp.freeze()
         self.contents.append(boxmodel.Caret(self.subj, index))
@@ -61,4 +67,6 @@ class VMode(Mode):
 
     def freeze(self):
         self.contents.append(boxmodel.Caret(self.subj, len(self.subj)))
-        return boxmodel.vpack(self.contents)
+        res = boxmodel.vpack(self.contents)
+        self.mapping.obj = res
+        return res

@@ -33,6 +33,7 @@ class Editor(object):
         self.height = height
         self.children = []
         self.ver = 0
+        self.frames = {}
         self.rootbox = None
         self.build_rootbox = None
         self.update_hook = lambda editor: None
@@ -41,6 +42,15 @@ class Editor(object):
         self.copybuf = None
         self.scroll_x = 0
         self.scroll_y = 0
+
+    def get_rect(self, node):
+        if node not in self.frames:
+            return
+        obj = self.frames[node].obj
+        if isinstance(obj, list):
+            return rect_enclosure([box.rect for box in obj if hasattr(box, 'rect')])
+        elif obj is not None:
+            return obj.rect
 
 module = sys.modules[__name__]
 
@@ -210,45 +220,6 @@ def delta_point_rect(point, rect):
     y1 = min(max(y0, y), y+h)
     return (x1-x0), (y1-y0)
 
-def is_hcaret(node):
-    if isinstance(node, boxmodel.Caret):
-        if not isinstance(node.subj, dom.Node):
-            return
-        if node.subj.type != 'list' or len(node.subj) == 0:
-            return isinstance(node.parent, boxmodel.HBox)
-
-def hcarets_above(node):
-    parent = node.parent
-    success = False
-    while parent is not None:
-        if isinstance(parent, boxmodel.VBox):
-            index = parent.index(node)
-            for item in reversed(parent[:index]):
-                for subnode in item.traverse():
-                    if is_hcaret(subnode):
-                        yield subnode
-                        success = True
-                if success:
-                    return
-        node   = parent
-        parent = node.parent
-
-def hcarets_below(node):
-    parent = node.parent
-    success = False
-    while parent is not None:
-        if isinstance(parent, boxmodel.VBox):
-            index = parent.index(node)
-            for item in parent[index+1:]:
-                for subnode in item.traverse():
-                    if is_hcaret(subnode):
-                        yield subnode
-                        success = True
-                if success:
-                    return
-        node   = parent
-        parent = node.parent
-
 cursor = [0, 0]
 def update_cursor(t):
     x, y = cursor
@@ -258,16 +229,24 @@ def update_cursor(t):
     
     document = focus.document
     cursors = defaultdict(list)
-    for node in focus.rootbox.traverse():
-        if not isinstance(node, boxmodel.Caret):
-            continue
-        if node.subj != focus.selection.subj:
-            continue
-        if node.index < focus.selection.start:
-            continue
-        if node.index > focus.selection.stop:
-            continue
-        cursors[node.parent].append(node.rect)
+    if focus.selection.subj not in focus.frames:
+        return
+    mapping = focus.frames[focus.selection.subj]
+    if mapping.obj is None:
+        return
+    boxes = mapping.obj if isinstance(mapping.obj, list) else [mapping.obj]
+
+    for box in boxes:
+        for node in box.traverse():
+            if not isinstance(node, boxmodel.Caret):
+                continue
+            if node.subj != focus.selection.subj:
+                continue
+            if node.index < focus.selection.start:
+                continue
+            if node.index > focus.selection.stop:
+                continue
+            cursors[node.parent].append(node.rect)
 
     color = (0, 0, 1.0, 0.5)
     if focus.selection.subj.type == 'list':
@@ -277,38 +256,19 @@ def update_cursor(t):
     if focus.selection.subj.type == 'binary':
         color = (0.5, 0.0, 1.0, 0.5)
     for container, cursorset in cursors.items():
-        x0, y0, w0, h0 = cursorset[0]
-        x2 = x0+w0
-        y2 = y0+h0
-        for x1, y1, w1, h1 in cursorset[1:]:
-            x2 = max(x2, x1+w1)
-            y2 = max(y2, y1+h1)
-            x0 = min(x0, x1)
-            y0 = min(y0, y1)
-        visual.quad((x0, y0, x2-x0, y2-y0), color)
+        rect = rect_enclosure(cursorset)
+        visual.quad(rect, color)
 
-def find_caret(editor, subj, index):
-    for frame in editor.rootbox.traverse():
-        if isinstance(frame, boxmodel.Caret):
-            if frame.subj == subj and frame.index == index:
-                return frame
-
-def navigate(editor, sel, hcarets_fn):
-    caret = find_caret(editor, sel.subj, sel.head)
-    if caret is None:
-        return
-    if sel.x_anchor is None:
-        sel.x_anchor = caret.rect[0]
-    def nearest(node):
-        x,y,w,h = node.rect
-        return abs(x - sel.x_anchor)
-    try:
-        node = min(hcarets_fn(caret), key=nearest)
-    except ValueError as v:
-        return
-    else:
-        sel.subj = node.subj
-        sel.head = sel.tail = node.index
+def rect_enclosure(rects):
+    x0, y0, w0, h0 = rects[0]
+    x2 = x0+w0
+    y2 = y0+h0
+    for x1, y1, w1, h1 in rects[1:]:
+        x2 = max(x2, x1+w1)
+        y2 = max(y2, y1+h1)
+        x0 = min(x0, x1)
+        y0 = min(y0, y1)
+    return x0, y0, x2-x0, y2-y0
 
 def hierarchy_of(node):
     result = [node]
@@ -356,6 +316,10 @@ def label_editor(editor, sel):
     selection = Selection.bottom(body)
     label_editor = Editor(document, selection, x=0, y=0)
     label_editor.build_rootbox = editor.build_rootbox
+
+    label_editor.width  = editor.width
+    label_editor.height = 20
+
     editor.children.append(label_editor)
     focus = label_editor
 
@@ -363,40 +327,6 @@ def label_editor(editor, sel):
         subj.label = label_editor.document.body[:]
     label_editor.close_hook  = hook
     label_editor.update_hook = hook
-
-def compile_expression(expr):
-    if expr.type == 'symbol':
-        symbol = expr[:]
-        if symbol[:1].isdigit():
-            return ast.Num(int(symbol), lineno=0, col_offset=0)
-        else:
-            return ast.Name(symbol, ast.Load(), lineno=0, col_offset=0)
-    else:
-        assert False
-
-def evaluate_document(document):
-    for item in document.body:
-        if item.label == 'language':
-            language = item[:]
-            break
-    else:
-        return
-    if language != 'python':
-        return
-    statements = []
-    for item in document.body:
-        if item.label == 'language':
-            assert item[:] == 'python'
-        elif item.label == 'print' and item.type == 'list':
-            statement = ast.Print(None, [compile_expression(expr) for expr in item], True, lineno=0, col_offset=0)
-            statements.append(statement)
-        else:
-            if isinstance(item, dom.Literal):
-                print "error at ", repr(item.ident)
-            print "should present the error in the editor"
-            print document.nodes
-            return
-    exec compile(ast.Module(statements), "t+", 'exec')
 
 cursor_tail = None
 alt_pressed = False
@@ -426,12 +356,6 @@ def process_event(ev):
                 focus = editor
             else:
                 live = False
-        elif sym == SDLK_F5:
-            evaluate_document(document)
-        elif sym == SDLK_UP:
-            navigate(focus, sel, hcarets_above)
-        elif sym == SDLK_DOWN:
-            navigate(focus, sel, hcarets_below)
         elif sym == SDLK_LALT:
             alt_pressed = True
 
@@ -454,6 +378,13 @@ def pick_nearest(editor, x, y):
         else:
             return None, float('inf')
     return nearest(editor.rootbox, 500**4)[0]
+
+def is_hcaret(node):
+    if isinstance(node, boxmodel.Caret):
+        if not isinstance(node.subj, dom.Node):
+            return
+        if node.subj.type != 'list' or len(node.subj) == 0:
+            return isinstance(node.parent, boxmodel.HBox)
 
 def paint(t):
     #272822
