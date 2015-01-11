@@ -11,13 +11,13 @@ def translate_alias(alias):
 
 def translate_arguments(arguments):
     arglist = [translate_expr(arg) for arg in arguments.args]
+    base = len(arguments.args) - len(arguments.defaults)
+    for i, default in enumerate(arguments.defaults, base):
+        arglist[i] = Node("", u"default", [arglist[i], translate_expr(default)])
     if arguments.vararg is not None:
         arglist.append(Node("", u"vararg", unicode(arguments.vararg)))
     if arguments.kwarg is not None:
         arglist.append(Node("", u"kwarg", unicode(arguments.kwarg)))
-    if len(arguments.defaults) > 0:
-        print "default arguments", arguments.defaults
-        return Node("", u"error", u"{}".format(arguments))
     return Node("", u"", arglist)
 
 binops = {
@@ -47,6 +47,8 @@ def translate_expr(expr):
     elif isinstance(expr, ast.BinOp):
         op = binops[expr.op.__class__.__name__]
         return Node("", u"binop", [translate_expr(expr.left), op, translate_expr(expr.right)])
+    elif isinstance(expr, ast.Lambda):
+        return Node("", u"lambda", [translate_arguments(expr.args), translate_expr(expr.body)])
     elif isinstance(expr, ast.Compare):
         chain = [translate_expr(expr.left)]
         for op, right in zip(expr.ops, expr.comparators):
@@ -74,6 +76,9 @@ def translate_expr(expr):
         if expr.kwargs is not None:
             arglist.append(Node("", u"kwarg", translate_expr(expr.kwargs)))
         return Node("", u"", arglist)
+    elif isinstance(expr, ast.Dict):
+        pairs = [Node("", u"", [translate_expr(key), translate_expr(value)]) for key, value in zip(expr.keys, expr.values)]
+        return Node("", u"dict", pairs)
     elif isinstance(expr, ast.Attribute):
         return Node("", u"attr", [translate_expr(expr.value), unicode(expr.attr)])
     elif isinstance(expr, ast.List):
@@ -109,7 +114,6 @@ def translate_expr(expr):
             return Node('', u"yield", [])
         return Node('', u"yield", [translate_expr(expr.value)])
     else:
-        print "expression:", expr
         return Node("", u"error", u"{}".format(expr))
 
 def translate_comprehension(comp):
@@ -128,7 +132,6 @@ def translate_slice(slice):
     elif isinstance(slice, ast.Index):
         return translate_expr(slice.value)
     else:
-        print "slice:", slice
         return Node("", u"error", u"{}".format(slice))
 
 def translate_cond_stmt(stmt):
@@ -138,16 +141,36 @@ def translate_cond_stmt(stmt):
         return Node("", u"while", [translate_expr(stmt.test)] + [translate_stmt(st) for st in stmt.body])
     elif isinstance(stmt, ast.For):
         return Node("", u"for", [translate_expr(stmt.target), translate_expr(stmt.iter)] + [translate_stmt(st) for st in stmt.body])
+    elif isinstance(stmt, ast.TryExcept):
+        body = [translate_stmt(st) for st in stmt.body]
+        body.extend(translate_handler(handler) for handler in stmt.handlers)
+        return Node("", u"try", body)
     else:
-        print "conditional statement:", stmt
         return Node("", u"error", u"{}".format(stmt))
 
+def translate_decorators(decorator_list, subj):
+    return Node('', u"decorator", [translate_expr(deco) for deco in decorator_list] + [subj])
+
+def translate_handler(handler):
+    contents = []
+    if handler.type is not None:
+        contents.append(Node("", u"type", translate_expr(handler.type)))
+    if handler.name is not None:
+        contents.append(Node("", u"as", translate_expr(handler.name)))
+    contents.extend(translate_stmt(st) for st in handler.body)
+    return Node("", u"except", contents)
+
 def translate_stmt(stmt):
-    if isinstance(stmt, ast.FunctionDef) and len(stmt.decorator_list) == 0:
+    if isinstance(stmt, ast.FunctionDef):
         name = unicode(stmt.name)
         args = translate_arguments(stmt.args)
         body = [translate_stmt(st) for st in stmt.body]
-        return Node("", u"def", [name, args] + body)
+        return translate_decorators(stmt.decorator_list, Node("", u"def", [name, args] + body))
+    elif isinstance(stmt, ast.ClassDef):
+        name = unicode(stmt.name)
+        bases = Node("", u"bases", [translate_expr(expr) for expr in stmt.bases])
+        body = [translate_stmt(st) for st in stmt.body]
+        return translate_decorators(stmt.decorator_list, Node("", u"class", [name, bases] + body))
     elif isinstance(stmt, ast.Return):
         if stmt.value is not None:
             ret = [translate_expr(stmt.value)]
@@ -164,9 +187,11 @@ def translate_stmt(stmt):
         return Node("", u"assert", contents)
     elif isinstance(stmt, ast.Print):
         if stmt.dest is not None:
-            print "print has a dest?", stmt.dest
+            dest = [Node("", u"dest", [translate_expr(stmt.dest)])]
+        else:
+            dest = []
         label = u"print-line" if stmt.nl else u"print"
-        return Node("", label, [translate_expr(value) for value in stmt.values])
+        return Node("", label, dest + [translate_expr(value) for value in stmt.values])
     elif isinstance(stmt, ast.Global):
         return Node("", u"global", [unicode(name) for name in stmt.names])
     elif isinstance(stmt, ast.Assign):
@@ -186,6 +211,16 @@ def translate_stmt(stmt):
         if hasattr(stmt, 'orelse'):
             contents.append(Node("", u"", [translate_stmt(st) for st in stmt.orelse]))
         return Node("", u"cond", contents)
+    elif isinstance(stmt, ast.With):
+        contents = [translate_expr(stmt.context_expr)]
+        if stmt.optional_vars is not None:
+            contents.append(Node('', u'as', [translate_expr(stmt.optional_vars)]))
+        contents.extend(translate_stmt(st) for st in stmt.body)
+        return Node("", u"with", contents)
+    elif isinstance(stmt, ast.TryFinally):
+        body = Node("", u"", [translate_stmt(st) for st in stmt.body])
+        fin = Node("", u"", [translate_stmt(st) for st in stmt.finalbody])
+        return Node("", u"try-finally", [body, fin])
     elif isinstance(stmt, ast.ImportFrom):
         if stmt.level != 0:
             print "stmt level a number?", stmt.level
@@ -194,6 +229,22 @@ def translate_stmt(stmt):
         return Node("", u'import', [translate_alias(alias) for alias in stmt.names])
     elif isinstance(stmt, ast.Expr):
         return translate_expr(stmt.value)
+    elif isinstance(stmt, ast.Exec):
+        contents = [translate_expr(stmt.body)]
+        if stmt.globals is not None:
+            contents.append(Node("", u"globals", [translate_expr(stmt.globals)]))
+        if stmt.locals is not None:
+            contents.append(Node("", u"locals", [translate_expr(stmt.locals)]))
+        return Node("", u"exec", contents)
+    elif isinstance(stmt, ast.Raise):
+        contents = []
+        if stmt.type is not None:
+            contents.append(Node("", u"type", [translate_expr(stmt.type)]))
+        if stmt.inst is not None:
+            contents.append(Node("", u"inst", [translate_expr(stmt.inst)]))
+        if stmt.tback is not None:
+            contents.append(Node("", u"tback", [translate_expr(stmt.tback)]))
+        return Node("", u"raise", contents)
     elif isinstance(stmt, ast.Continue):
         return Node("", u"", u"continue")
     elif isinstance(stmt, ast.Break):
@@ -201,7 +252,6 @@ def translate_stmt(stmt):
     elif isinstance(stmt, ast.Pass):
         return Node("", u"", u"pass")
     else:
-        print "statement:", stmt
         return Node("", u"error", u"{}".format(stmt))
 
 if __name__=='__main__':
