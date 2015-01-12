@@ -140,8 +140,8 @@ def node_insert(document, node):
                 node_insert(document, subnode)
 
 def node_remove(document, node):
-    node.document = None
     assert node.document is document
+    node.document = None
     if document is None:
         return
     if isinstance(node, Literal):

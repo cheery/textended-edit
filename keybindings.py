@@ -11,13 +11,19 @@ class KeyEvent(object):
         self.text = text
 
 class KeyPattern(object):
-    def __init__(self, key, mods, action):
+    def __init__(self, key, text, mods, action):
         self.key = key
+        self.text = text
         self.mods = mods
         self.action = action
 
     def __call__(self, event):
-        return (self.key == event.key or self.key == event.text) and self.mods.issubset(event.mods)
+        triggered = False
+        if self.key is not None:
+            triggered |= (self.key == event.key)
+        if self.text is not None:
+            triggered |= (self.text == event.text)
+        return triggered and self.mods.issubset(event.mods)
 
 class Mode(object):
     def __init__(self, name, default=None, transition=None):
@@ -28,7 +34,13 @@ class Mode(object):
 
     def key(self, name, *mods):
         def _impl_(fn):
-            self.bindings.append(KeyPattern(name, set(mods), fn))
+            self.bindings.append(KeyPattern(name, None, set(mods), fn))
+            return fn
+        return _impl_
+
+    def text(self, name, *mods):
+        def _impl_(fn):
+            self.bindings.append(KeyPattern(None, name, set(mods), fn))
             return fn
         return _impl_
 
@@ -81,19 +93,15 @@ def insert_delete(event):
         sel.head += 1
     sel.drop()
 
-@insert.key('escape')
-def insert_escape(event):
-    print "close hook"
-
-@insert.key("'")
+@insert.text("'")
 def insert_list(event):
     insert_new_node(event, list)
 
-@insert.key("#")
+@insert.text("#")
 def insert_binary(event):
     insert_new_node(event, str)
 
-@insert.key('"')
+@insert.text('"')
 def insert_string(event):
     insert_new_node(event, unicode)
 
@@ -134,7 +142,7 @@ def slit(sel):
         else:
             sel.subj.put(sel.head, [dom.Literal("", u"", contents)])
 
-@insert.key('(')
+@insert.text('(')
 def insert_fall_left(event):
     fall_before(event.editor.selection)
 
@@ -149,7 +157,7 @@ def fall_before(sel):
     if type != 'list':
         fall_before(sel)
 
-@insert.key(')')
+@insert.text(')')
 def insert_fall_right(event):
     fall_after(event.editor.selection)
 
@@ -314,3 +322,31 @@ def is_hcaret(node):
             return
         if node.subj.type != 'list' or len(node.subj) == 0:
             return isinstance(node.parent, boxmodel.HBox)
+
+@node_insert.key('left alt')
+def node_insert_editor(event):
+    print 'insert editor'
+    sel = event.editor.selection
+    if sel.subj.type == 'symbol':
+        subj = sel.subj.parent
+    else:
+        subj = sel.subj
+    if subj is None:
+        return
+
+    body = dom.Symbol(subj.label)
+    document = dom.Document(body)
+    selection = dom.Selection.bottom(body)
+    event.editor = event.editor.create_sub_editor(document, selection)
+
+    def hook(editor):
+        subj.label = editor.document.body[:]
+    event.editor.close_hook  = hook
+    event.editor.update_hook = hook
+
+@insert.key('escape')
+def insert_escape(event):
+    if event.editor.parent is not None:
+        event.editor.close_hook(event.editor)
+        event.editor.parent.children.remove(event.editor)
+        event.editor = event.editor.parent

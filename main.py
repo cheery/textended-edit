@@ -42,6 +42,7 @@ class Editor(object):
         self.copybuf = None
         self.scroll_x = 0
         self.scroll_y = 0
+        self.parent = None
 
     def get_rect(self, node):
         if node not in self.frames:
@@ -51,6 +52,15 @@ class Editor(object):
             return rect_enclosure([box.rect for box in obj if hasattr(box, 'rect')])
         elif obj is not None:
             return obj.rect
+
+    def create_sub_editor(self, document, selection):
+        subeditor = Editor(document, selection)
+        subeditor.build_rootbox = self.build_rootbox
+        subeditor.width = self.width
+        subeditor.height = self.height
+        self.children.append(subeditor)
+        subeditor.parent = self
+        return subeditor
 
 module = sys.modules[__name__]
 
@@ -248,7 +258,7 @@ def update_cursor(t):
                 continue
             cursors[node.parent].append(node.rect)
 
-    color = (0, 0, 1.0, 0.5)
+    color = (0, 1.0, 1.0, 0.5)
     if focus.selection.subj.type == 'list':
         color = (0, 1.0, 0.0, 0.5)
     if focus.selection.subj.type == 'string':
@@ -301,63 +311,7 @@ def simplify_selection(headpos, tailpos):
         tail += tail_inc
     return Selection(subj, head, tail)
 
-def label_editor(editor, sel):
-    global focus
-    if sel.subj.type == 'symbol':
-        subj = sel.subj.parent
-    else:
-        subj = sel.subj
-    if subj is None:
-        return
-
-    body = dom.Symbol(subj.label)
-
-    document = dom.Document(body)
-    selection = Selection.bottom(body)
-    label_editor = Editor(document, selection, x=0, y=0)
-    label_editor.build_rootbox = editor.build_rootbox
-
-    label_editor.width  = editor.width
-    label_editor.height = 20
-
-    editor.children.append(label_editor)
-    focus = label_editor
-
-    def hook(editor):
-        subj.label = label_editor.document.body[:]
-    label_editor.close_hook  = hook
-    label_editor.update_hook = hook
-
 cursor_tail = None
-alt_pressed = False
-def process_event(ev):
-    global live, cursor_tail, alt_pressed, focus
-    document = focus.document
-    sel = focus.selection
-
-    if ev.type == SDL_KEYDOWN:
-        mod = ev.key.keysym.mod
-        sym = ev.key.keysym.sym
-        name = SDL_GetKeyName(ev.key.keysym.sym).lower()
-
-        mods = set(name for flag, name in modifiers.items() if mod & flag != 0)
-
-        if alt_pressed and sym == SDLK_LALT:
-            label_editor(focus, sel)
-        alt_pressed = False
-
-        ctrl = mod & KMOD_CTRL != 0
-        shift = mod & KMOD_SHIFT != 0
-
-        if sym == SDLK_ESCAPE:
-            if focus != editor:
-                focus.close_hook(focus)
-                editor.children.remove(focus)
-                focus = editor
-            else:
-                live = False
-        elif sym == SDLK_LALT:
-            alt_pressed = True
 
 def pick_nearest(editor, x, y):
     def nearest(node, maxdist):
@@ -482,7 +436,6 @@ event = SDL_Event()
 live = True
 while live:
     while SDL_PollEvent(byref(event)) != 0:
-        process_event(event)
         if event.type == SDL_QUIT:
             live = False
         elif event.type == SDL_WINDOWEVENT:
@@ -524,17 +477,21 @@ while live:
         update = True
         key_event = keybindings.KeyEvent(mode, focus, key, mod, text)
         valid = [binding for binding in mode.bindings if binding(key_event)]
-        if len(valid) > 1:
-            print "more than one keybinding"
-        elif len(valid) == 1:
-            valid[0].action(key_event)
-        elif mode.default is not None:
-            mode.default(key_event)
-
-        if key_event.mode is mode:
+        try:
+            if len(valid) > 1:
+                print "more than one keybinding"
+            elif len(valid) == 1:
+                valid[0].action(key_event)
+            elif mode.default is not None:
+                mode.default(key_event)
+        except Exception as exc:
+            traceback.print_exc()
+        if key_event.mode is not mode:
             mode = key_event.mode
         elif mode.transition is not None:
             mode = mode.transition
+        if key_event.editor is not focus:
+            focus = key_event.editor
     if update:
         focus.update_hook(focus)
     paint(time.time())
