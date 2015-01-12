@@ -47,7 +47,7 @@ def load(path):
     return font
 
 class Font(object):
-    def __call__(self, text, size=16, index=0):
+    def __call__(self, text, size=16, index=0, color=(1.0, 1.0, 1.0, 1.0)):
         result = []
         kern = (0, 0)
         scale = float(size) / self.size
@@ -66,7 +66,7 @@ class Font(object):
                     x2 = x1 + w
                     x3 = (char['xadvance']) * scale * 0.5
                     result.append(Glue(x1))
-                    result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding))
+                    result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding, color))
                     result.append(Glue(x3 - x2))
             else:
                 char = self.characters[kern[1]]
@@ -77,7 +77,7 @@ class Font(object):
                 x2 = x1 + w
                 x3 = (char['xadvance'] + kern_amt) * scale
                 result.append(Glue(x1))
-                result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding))
+                result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding, color))
                 result.append(Glue(x3 - x2))
             index += 1
             result.append(Caret(text, index))

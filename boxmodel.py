@@ -5,13 +5,14 @@ class Frame(object):
 
 class LetterBox(Frame):
     render = 1
-    def __init__(self, width, height, depth, font, texcoords, padding):
+    def __init__(self, width, height, depth, font, texcoords, padding, color):
         self.width  = width
         self.height = height
         self.depth  = depth
         self.font = font
         self.texcoords = texcoords
         self.padding = padding
+        self.color = color
 
 class Glue(Frame):
     render = 2

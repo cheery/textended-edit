@@ -138,28 +138,31 @@ SDL_FreeSurface(image)
 vertex = shaders.compileShader("""
 attribute vec2 position;
 attribute vec2 texcoord;
+attribute vec4 color;
 
 uniform vec2 resolution;
 uniform vec2 scroll;
 
 varying vec2 v_texcoord;
+varying vec4 v_color;
 void main() {
     v_texcoord = texcoord;
     gl_Position = vec4((position - scroll) / resolution * 2.0 - 1.0, 0.0, 1.0);
+    v_color = color;
 }""", GL_VERTEX_SHADER)
 fragment = shaders.compileShader("""
 uniform sampler2D texture;
 
 varying vec2 v_texcoord;
+varying vec4 v_color;
 
 uniform float smoothing;
-uniform vec4 color;
 
 void main() {
     float deriv = length(fwidth(v_texcoord));
     float distance = texture2D(texture, v_texcoord).a;
     float alpha = smoothstep(0.5 - smoothing*deriv, 0.5 + smoothing*deriv, distance);
-    gl_FragColor = vec4(color.rgb, color.a*alpha);
+    gl_FragColor = vec4(v_color.rgb, v_color.a*alpha);
 }""", GL_FRAGMENT_SHADER)
 
 shader = shaders.compileProgram(vertex, fragment)
@@ -181,11 +184,12 @@ def burst(vertices, subj, x, y):
                 y0 = y - node.depth
                 s0, t0, s1, t1 = node.texcoords
                 p0, p1, p2, p3 = node.padding
+                c0, c1, c2, c3 = node.color
                 vertices.extend([
-                    x0-p0, y0-p1, s0, t0,
-                    x0-p0, y1+p3, s0, t1,
-                    x1+p2, y1+p3, s1, t1,
-                    x1+p2, y0-p1, s1, t0,
+                    x0-p0, y0-p1, s0, t0, c0, c1, c2, c3,
+                    x0-p0, y1+p3, s0, t1, c0, c1, c2, c3,
+                    x1+p2, y1+p3, s1, t1, c0, c1, c2, c3,
+                    x1+p2, y0-p1, s1, t0, c0, c1, c2, c3,
                 ])
                 vertexcount += 4
                 x0 = x1
@@ -357,22 +361,27 @@ def paint(t):
     loc = glGetUniformLocation(shader, "scroll")
     glUniform2f(loc, editor.scroll_x, editor.scroll_y)
 
-    loc = glGetUniformLocation(shader, "color")
-    glUniform4f(loc, 1, 1, 1, 0.9)
+    #loc = glGetUniformLocation(shader, "color")
+    #glUniform4f(loc, 1, 1, 1, 0.9)
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo)
 
     i_position = glGetAttribLocation(shader, "position")
     glEnableVertexAttribArray(i_position)
-    glVertexAttribPointer(i_position, 2, GL_FLOAT, GL_FALSE, 4*4, c_void_p(0))
+    glVertexAttribPointer(i_position, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(0))
 
     i_texcoord = glGetAttribLocation(shader, "texcoord")
     glEnableVertexAttribArray(i_texcoord)
-    glVertexAttribPointer(i_texcoord, 2, GL_FLOAT, GL_FALSE, 4*4, c_void_p(4*2))
+    glVertexAttribPointer(i_texcoord, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*2))
+
+    i_color = glGetAttribLocation(shader, "color")
+    glEnableVertexAttribArray(i_color)
+    glVertexAttribPointer(i_color, 4, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*4))
 
     glDrawArrays(GL_QUADS, 0, vertexcount)
     glDisableVertexAttribArray(i_position)
     glDisableVertexAttribArray(i_texcoord)
+    glDisableVertexAttribArray(i_color)
 
     update_cursor(t)
 

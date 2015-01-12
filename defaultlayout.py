@@ -4,36 +4,44 @@ sans = font.load('OpenSans.fnt')
 fontsize = 10
 fontsize_small = 6
 
+blue   = 0.5, 0.5, 1.0, 1.0
+green  = 1.0, 1.0, 0.0, 1.0
+yellow = 1.0, 1.0, 0.0, 1.0
+pink   = 1.0, 0.0, 1.0, 1.0
+
 def layout_generic(mapping):
     node = mapping.subj
     if not isinstance(node, dom.Literal):
         return sans(node, fontsize)
     elif isinstance(node.contents, str):
         if len(node.label) > 0:
-            prefix = sans(node.label + ':#', fontsize_small)
-            postfix = sans('#', fontsize_small)
+            prefix = sans(node.label, fontsize_small, color=blue)
+            prefix += sans('#', fontsize_small, color=pink)
+            postfix = sans('#', fontsize_small, color=pink)
         else:
-            prefix = sans('#', fontsize_small)
-            postfix = sans('#', fontsize_small)
-        return prefix + sans(node, fontsize_small) + postfix
+            prefix = sans('#', fontsize_small, color=pink)
+            postfix = sans('#', fontsize_small, color=pink)
+        return prefix + sans(node, fontsize_small, color=pink) + postfix
     elif isinstance(node.contents, unicode):
         if len(node.label) > 0:
-            prefix = sans(node.label + ':"', fontsize_small)
-            postfix = sans('"', fontsize_small)
+            prefix = sans(node.label, fontsize_small, color=blue)
+            prefix += sans('"', fontsize_small, color=green)
+            postfix = sans('"', fontsize_small, color=green)
         else:
-            prefix = sans('"', fontsize_small)
-            postfix = sans('"', fontsize_small)
-        return prefix + sans(node, fontsize_small) + postfix
+            prefix = sans('"', fontsize_small, color=green)
+            postfix = sans('"', fontsize_small, color=green)
+        return prefix + sans(node, fontsize_small, color=green) + postfix
     else:
         hmode = layout.HMode(mapping)
+        hmode.extend(sans('[', fontsize))
         if len(node.label) > 0:
-            hmode.extend(sans(node.label + ':', fontsize_small))
-        hmode.extend(sans('[', fontsize_small))
+            hmode.extend(sans(node.label, fontsize, color=blue))
+            hmode.append(boxmodel.Glue(fontsize))
         for i, subnode in enumerate(node):
             if i > 0:
-                hmode.append(boxmodel.Glue(fontsize_small))
+                hmode.append(boxmodel.Glue(fontsize))
             hmode(layout_generic, subnode)
-        hmode.extend(sans(']', fontsize_small))
+        hmode.extend(sans(']', fontsize))
         return hmode
 
 def layout_python(mapping):
