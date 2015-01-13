@@ -1,4 +1,3 @@
-#import pygame
 import gate
 import sys
 import traceback
@@ -21,7 +20,6 @@ import dom
 from dom import Position, Selection
 from ctypes import c_int, byref, c_char, POINTER, c_void_p
 from sdl2 import *
-from sdl2.sdlimage import *
 
 class Editor(object):
     def __init__(self, document, selection, x=0, y=0, width=200, height=200):
@@ -86,10 +84,6 @@ focus = editor
 
 editor.build_rootbox = defaultlayout.build_boxmodel
 
-#screen_flags = pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE
-#screen = pygame.display.set_mode((640, 480), screen_flags)
-#editor.width, editor.height = screen.get_size()
-
 SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)
 window = SDL_CreateWindow(b"textended-edit",
                           SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -111,67 +105,14 @@ editor.y += 10
 editor.width  -= 20
 editor.height -= 20
 
-visual = renderers.Visual()
-
 glEnable(GL_TEXTURE_2D)
 glEnable(GL_BLEND)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-sans = defaultlayout.sans#font.load('OpenSans.fnt')
+flatlayer = renderers.FlatLayer()
+fontlayer = renderers.FontLayer(defaultlayout.sans)
 
-#data = pygame.image.tostring(sans.image, "RGBA", 1)
-
-image = IMG_Load(sans.filename.encode('utf-8'))
-#image = pygame.image.load(page.group(1))
-#width, height = image.get_size()
-#image = SDL_ConvertSurfaceFormat(image, SDL_PIXELFORMAT_RGBA8888, 0)
-
-texture = glGenTextures(1)
-glBindTexture(GL_TEXTURE_2D, texture)
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-ptr = c_void_p(image.contents.pixels)
-glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.contents.w, image.contents.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptr)
-
-SDL_FreeSurface(image)
-
-vertex = shaders.compileShader("""
-attribute vec2 position;
-attribute vec2 texcoord;
-attribute vec4 color;
-
-uniform vec2 resolution;
-uniform vec2 scroll;
-
-varying vec2 v_texcoord;
-varying vec4 v_color;
-void main() {
-    v_texcoord = texcoord;
-    gl_Position = vec4((position - scroll) / resolution * 2.0 - 1.0, 0.0, 1.0);
-    v_color = color;
-}""", GL_VERTEX_SHADER)
-fragment = shaders.compileShader("""
-uniform sampler2D texture;
-
-varying vec2 v_texcoord;
-varying vec4 v_color;
-
-uniform float smoothing;
-
-void main() {
-    float deriv = length(fwidth(v_texcoord));
-    float distance = texture2D(texture, v_texcoord).a;
-    float alpha = smoothstep(0.5 - smoothing*deriv, 0.5 + smoothing*deriv, distance);
-    gl_FragColor = vec4(v_color.rgb, v_color.a*alpha);
-}""", GL_FRAGMENT_SHADER)
-
-shader = shaders.compileProgram(vertex, fragment)
-
-vertexcount = 0
-vbo = glGenBuffers(1)
-
-def burst(vertices, subj, x, y):
-    global vertexcount
+def burst(subj, x, y):
     subj.rect = x, y-subj.depth, subj.width, subj.height+subj.depth
     if isinstance(subj, boxmodel.HBox):
         x0 = x
@@ -185,16 +126,10 @@ def burst(vertices, subj, x, y):
                 s0, t0, s1, t1 = node.texcoords
                 p0, p1, p2, p3 = node.padding
                 c0, c1, c2, c3 = node.color
-                vertices.extend([
-                    x0-p0, y0-p1, s0, t0, c0, c1, c2, c3,
-                    x0-p0, y1+p3, s0, t1, c0, c1, c2, c3,
-                    x1+p2, y1+p3, s1, t1, c0, c1, c2, c3,
-                    x1+p2, y0-p1, s1, t0, c0, c1, c2, c3,
-                ])
-                vertexcount += 4
+                fontlayer.quad((x0-p0, y0-p1, x1+p2, y1+p3), node.texcoords, node.color)
                 x0 = x1
             elif isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
-                burst(vertices, node, x0, y)
+                burst(node, x0, y)
                 x0 += node.width
             elif isinstance(node, boxmodel.Caret):
                 node.rect = x0-0.5, y-subj.depth, 1, subj.height+subj.depth
@@ -204,28 +139,21 @@ def burst(vertices, subj, x, y):
             if isinstance(node, boxmodel.Glue):
                 y0 -= node.width
             elif isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
-                burst(vertices, node, x, y0 - node.height)
+                burst(node, x, y0 - node.height)
                 y0 -= node.height + node.depth
             elif isinstance(node, boxmodel.Caret):
                 node.rect = x, y0-0.5, subj.width, 1
 
 def update_characters(t):
-    global vertexcount
-    vertices = []
-
     def layout_editor(editor, x, y):
         editor.rootbox = editor.build_rootbox(editor)
-        burst(vertices, editor.rootbox, editor.x+x, editor.height - editor.y+y)
+        burst(editor.rootbox, editor.x+x, editor.height - editor.y+y)
         for subeditor in editor.children:
             layout_editor(subeditor, x+editor.x, y+editor.y)
     if editor.rootbox is None or editor.document.ver != editor.ver:
-        vertexcount = 0
+        fontlayer.clear()
         layout_editor(editor, 0, 0)
-        vertices = (GLfloat * len(vertices))(*vertices)
-        glBindBuffer(GL_ARRAY_BUFFER, vbo)
-        glBufferData(GL_ARRAY_BUFFER, vertices, GL_STREAM_DRAW)
         editor.ver = editor.document.ver
-
 
 def delta_point_rect(point, rect):
     x0, y0 = point
@@ -236,6 +164,7 @@ def delta_point_rect(point, rect):
 
 cursor = [0, 0]
 def update_cursor(t):
+    flatlayer.clear()
     x, y = cursor
 
     if focus.rootbox is None:
@@ -271,7 +200,7 @@ def update_cursor(t):
         color = (0.5, 0.0, 1.0, 0.5)
     for container, cursorset in cursors.items():
         rect = rect_enclosure(cursorset)
-        visual.quad(rect, color)
+        flatlayer.rect(rect, color)
 
 def rect_enclosure(rects):
     x0, y0, w0, h0 = rects[0]
@@ -350,43 +279,10 @@ def paint(t):
     glClear(GL_COLOR_BUFFER_BIT)
 
     update_characters(t)
-
-    glUseProgram(shader)
-    loc = glGetUniformLocation(shader, "smoothing")
-    glUniform1f(loc, sans.size * 0.8)
-
-    loc = glGetUniformLocation(shader, "resolution")
-    glUniform2f(loc, width, height)
-
-    loc = glGetUniformLocation(shader, "scroll")
-    glUniform2f(loc, editor.scroll_x, editor.scroll_y)
-
-    #loc = glGetUniformLocation(shader, "color")
-    #glUniform4f(loc, 1, 1, 1, 0.9)
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo)
-
-    i_position = glGetAttribLocation(shader, "position")
-    glEnableVertexAttribArray(i_position)
-    glVertexAttribPointer(i_position, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(0))
-
-    i_texcoord = glGetAttribLocation(shader, "texcoord")
-    glEnableVertexAttribArray(i_texcoord)
-    glVertexAttribPointer(i_texcoord, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*2))
-
-    i_color = glGetAttribLocation(shader, "color")
-    glEnableVertexAttribArray(i_color)
-    glVertexAttribPointer(i_color, 4, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*4))
-
-    glDrawArrays(GL_QUADS, 0, vertexcount)
-    glDisableVertexAttribArray(i_position)
-    glDisableVertexAttribArray(i_texcoord)
-    glDisableVertexAttribArray(i_color)
-
     update_cursor(t)
 
-    visual.render(editor.scroll_x, editor.scroll_y, width, height)
-
+    fontlayer.render(editor.scroll_x, editor.scroll_y, width, height)
+    flatlayer.render(editor.scroll_x, editor.scroll_y, width, height)
 
 modifiers = {
     KMOD_LSHIFT:  'left shift',
