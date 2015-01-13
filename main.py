@@ -105,12 +105,12 @@ editor.y += 10
 editor.width  -= 20
 editor.height -= 20
 
-glEnable(GL_TEXTURE_2D)
 glEnable(GL_BLEND)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-flatlayer = renderers.FlatLayer()
+imglayer = renderers.ImageLayer()
 fontlayer = renderers.FontLayer(defaultlayout.sans)
+flatlayer = renderers.FlatLayer()
 
 def burst(subj, x, y):
     subj.rect = x, y-subj.depth, subj.width, subj.height+subj.depth
@@ -281,6 +281,16 @@ def paint(t):
     update_characters(t)
     update_cursor(t)
 
+    if t % 5 < 0.1:
+        imglayer.clear()
+
+    w = editor.width
+    h = editor.height
+    x = w/4 * math.sin(t*5)
+    y = h/4 * math.cos(t*3)
+    imglayer.quad((w/4 + x, h/4 + y, 3* w/4 + x, 3* h/4 - y), (0, 1, 0, 1), (0.0, 0.0, 0.0, 0.02))
+
+    imglayer.render(editor.scroll_x, editor.scroll_y, width, height)
     fontlayer.render(editor.scroll_x, editor.scroll_y, width, height)
     flatlayer.render(editor.scroll_x, editor.scroll_y, width, height)
 
