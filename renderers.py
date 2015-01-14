@@ -1,6 +1,6 @@
 from OpenGL.GL import *
 from OpenGL.GL import shaders
-from ctypes import c_void_p, byref
+from ctypes import POINTER, cast, c_char, c_void_p, byref
 from sdl2 import *
 from sdl2.sdlimage import *
 import atlas
@@ -28,6 +28,7 @@ class ImageLayer(object):
         self.height = 64
         self.allocator = atlas.Allocator(self.width, self.height)
         self.subtextures = {}
+        self.patch9_metrics = {}
 
         glEnable(GL_TEXTURE_2D)
         glBindTexture(GL_TEXTURE_2D, self.texture)
@@ -81,6 +82,49 @@ class ImageLayer(object):
         self.vertex(x0, y1, s0, t1, r, g, b, a)
         self.vertex(x1, y1, s1, t1, r, g, b, a)
         self.vertex(x1, y0, s1, t0, r, g, b, a)
+
+    def patch9(self, (x0, y0, x3, y3), (s0, t0, s1, t1, s2, t2, s3, t3), color):
+        if x3 < x0:
+            x0, x3 = x3, x0
+        if y3 < y0:
+            y0, y3 = y3, y0
+        dx0 = (s1-s0)*self.width
+        dx1 = (s3-s2)*self.height
+        dy0 = (t1-t0)*self.width
+        dy1 = (t3-t2)*self.height
+        x1 = x0 + dx0
+        y1 = y0 - dy0
+        x2 = x3 - dx1
+        y2 = y3 + dy1
+        self.quad((x0, y0, x1, y1), (s0, t0, s1, t1), color)
+        self.quad((x1, y0, x2, y1), (s1, t0, s2, t1), color)
+        self.quad((x2, y0, x3, y1), (s2, t0, s3, t1), color)
+        self.quad((x0, y1, x1, y2), (s0, t1, s1, t2), color)
+        self.quad((x1, y1, x2, y2), (s1, t1, s2, t2), color)
+        self.quad((x2, y1, x3, y2), (s2, t1, s3, t2), color)
+        self.quad((x0, y2, x1, y3), (s0, t2, s1, t3), color)
+        self.quad((x1, y2, x2, y3), (s1, t2, s2, t3), color)
+        self.quad((x2, y2, x3, y3), (s2, t2, s3, t3), color)
+
+    def patch9_texcoords(self, path):
+        if path in self.patch9_metrics:
+            return self.patch9_metrics[path]
+        s0, t0, s3, t3 = self.texcoords(path)
+        image = self.images.get(path)
+        width = image.contents.w
+        height = image.contents.h
+        pixels = cast(c_void_p(image.contents.pixels), POINTER(c_char))
+        x_stripe = [i for i in range(1, width) if pixels[i*4] == '\x00']
+        y_stripe = [i for i in range(1, height) if pixels[i*4*width] == '\x00']
+        s1 = s0 + float(x_stripe[0])  / self.width
+        s2 = s0 + float(x_stripe[-1]) / self.width
+        t2 = t3 + float(y_stripe[0]) / self.height
+        t1 = t3 + float(y_stripe[-1]) / self.height
+        s0 += 1.0 / self.width
+        t3 += 1.0 / self.height
+        self.patch9_metrics[path] = tx = s0, t0, s1, t1, s2, t2, s3, t3
+        return tx
+
 
     def texcoords(self, path):
         if path in self.subtextures:

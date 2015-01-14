@@ -282,15 +282,14 @@ def paint(t):
     update_characters(t)
     update_cursor(t)
 
-    imglayer.clear()
+    if t % 5 < 0.1:
+        imglayer.clear()
 
     w = editor.width
     h = editor.height
-    imglayer.quad((w/2, 0, w, w/2), (0, 1, 1, 0), (1.0, 1.0, 1.0, 1.0))
-
-#'assets/border-1px.png')
-    imglayer.quad((0, 0, w/4, w/4), imglayer.texcoords(None), (1.0, 1.0, 1.0, 1.0))
-    imglayer.quad((0, w/4, w/4, 2*w/4), imglayer.texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 1.0))
+    x = math.sin(t)*w/2
+    y = math.sin(t*7.0)*h/8
+    imglayer.patch9((w/2-x, 100+y, w/2+x, 200+y), imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
 
     imglayer.render(editor.scroll_x, editor.scroll_y, width, height)
     fontlayer.render(editor.scroll_x, editor.scroll_y, width, height)
