@@ -1,4 +1,5 @@
 import layout, font, boxmodel, dom
+from mapping import Mapping
 
 sans = font.load('OpenSans.fnt')
 fontsize = 10
@@ -8,6 +9,7 @@ blue   = 0.5, 0.5, 1.0, 1.0
 green  = 1.0, 1.0, 0.0, 1.0
 yellow = 1.0, 1.0, 0.0, 1.0
 pink   = 1.0, 0.0, 1.0, 1.0
+gray   = 0.5, 0.5, 0.5, 1.0
 
 def layout_generic(mapping):
     node = mapping.subj
@@ -145,32 +147,77 @@ def layout_python(mapping):
 def check_literal(node, label, type):
     return isinstance(node, dom.Literal) and node.label == label and node.type == type
 
-class Mapping(object):
-    __slots__ = ['frames', 'subj', 'obj']
-    def __init__(self, frames, subj):
-        self.frames = frames
-        self.subj = subj
-        self.obj = None
-
-    def submapping(self, node):
-        self.frames[node] = mapping = Mapping(self.frames, node)
-        return mapping
+def lisp_layout(mapping):
+    node = mapping.subj
+    if isinstance(node, dom.Symbol):
+        return sans(mapping.subj, fontsize)
+    elif isinstance(node.contents, str):
+        if len(node.label) > 0:
+            prefix = sans(node.label, fontsize, color=blue)
+            prefix += sans('#', fontsize, color=pink)
+            postfix = sans('#', fontsize, color=pink)
+        else:
+            prefix = sans('#', fontsize, color=pink)
+            postfix = sans('#', fontsize, color=pink)
+        return prefix + sans(node, fontsize, color=pink) + postfix
+    elif isinstance(node.contents, unicode):
+        if len(node.label) > 0:
+            prefix = sans(node.label, fontsize, color=blue)
+            prefix += sans('"', fontsize, color=green)
+            postfix = sans('"', fontsize, color=green)
+        else:
+            prefix = sans('"', fontsize, color=green)
+            postfix = sans('"', fontsize, color=green)
+        return prefix + sans(node, fontsize, color=green) + postfix
+    elif isinstance(node.contents, list):
+        tokens = []
+        tokens.extend(sans('(', fontsize, color=gray))
+        if len(node.label) > 0:
+            tokens.extend(sans(node.label, fontsize, color=blue))
+        for submapping in mapping:
+            if submapping.index > 0 or len(node.label) > 0:
+                tokens.extend(sans(' ', fontsize))
+            tokens.extend(submapping.apply(lisp_layout))
+        tokens.extend(sans(')', fontsize, color=gray))
+        width = sum(token.width for token in tokens if token.render > 0)
+        if width > 300:
+            return [vmode(tokens)]
+        else:
+            return [boxmodel.hpack(tokens)]
 
 def build_boxmodel(editor):
-    body = editor.document.body
-    layoutfn = layout_generic
-    for node in body:
-        if isinstance(node, dom.Literal) and node.label == 'language' and node[:] == "python":
-            layoutfn = layout_python
+    editor.mappings.clear()
+    mapping = Mapping(editor.mappings, editor.document.body)
+    def layout(mapping):
+        for submapping in mapping:
+            for token in submapping.apply(lisp_layout):
+                yield token
+    mapping.apply(layout)
+    return vmode(mapping.tokens)
 
-    if body.type != 'list':
-        return boxmodel.hpack(sans(body, fontsize))
-
-    editor.frames[body] = mapping = Mapping(editor.frames, body)
-
-    mode = layout.VMode(mapping)
-    for i, node in enumerate(body):
-        if i > 0:
-            mode.append(boxmodel.Glue(fontsize))
-        mode(layoutfn, node)
-    return mode.freeze()
+def vmode(tokens):
+    state = 'vertical'
+    hoist = []
+    frames = []
+    for token in tokens:
+        if token.clue == 'horizontal':
+            hoist.append(token)
+            state = token.clue
+        elif token.clue == 'hoist':
+            hoist.append(token)
+        else:
+            if state == 'horizontal':
+                frames.append(boxmodel.hpack(hoist))
+                hoist = []
+            else:
+                frames.extend(hoist)
+                hoist[:] = ()
+            frames.append(token)
+            state = 'vertical'
+    if state == 'horizontal':
+        frames.append(boxmodel.hpack(hoist))
+        hoist = []
+    else:
+        frames.extend(hoist)
+        hoist[:] = ()
+    return boxmodel.vpack(frames)

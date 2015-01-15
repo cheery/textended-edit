@@ -31,7 +31,7 @@ class Editor(object):
         self.height = height
         self.children = []
         self.ver = 0
-        self.frames = {}
+        self.mappings = {}
         self.rootbox = None
         self.build_rootbox = None
         self.update_hook = lambda editor: None
@@ -43,9 +43,9 @@ class Editor(object):
         self.parent = None
 
     def get_rect(self, node):
-        if node not in self.frames:
+        if node not in self.mappings:
             return
-        obj = self.frames[node].obj
+        obj = self.mappings[node].obj
         if isinstance(obj, list):
             return rect_enclosure([box.rect for box in obj if hasattr(box, 'rect')])
         elif obj is not None:
@@ -113,8 +113,12 @@ imglayer = renderers.ImageLayer(images)
 fontlayer = renderers.FontLayer(images, defaultlayout.sans)
 flatlayer = renderers.FlatLayer()
 
+
+
 def burst(subj, x, y):
     subj.rect = x, y-subj.depth, subj.width, subj.height+subj.depth
+    #imglayer.rect(subj.rect, imglayer.texcoords(None), (0.0, 0.0, 0.0, 0.02))
+    imglayer.patch9_rect(subj.rect, imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
     if isinstance(subj, boxmodel.HBox):
         x0 = x
         for node in subj.contents:
@@ -153,6 +157,7 @@ def update_characters(t):
             layout_editor(subeditor, x+editor.x, y+editor.y)
     if editor.rootbox is None or editor.document.ver != editor.ver:
         fontlayer.clear()
+        imglayer.clear()
         layout_editor(editor, 0, 0)
         editor.ver = editor.document.ver
 
@@ -173,12 +178,12 @@ def update_cursor(t):
     
     document = focus.document
     cursors = defaultdict(list)
-    if focus.selection.subj not in focus.frames:
+    if focus.selection.subj not in focus.mappings:
         return
-    mapping = focus.frames[focus.selection.subj]
-    if mapping.obj is None:
+    mapping = focus.mappings[focus.selection.subj]
+    if mapping.tokens is None:
         return
-    boxes = mapping.obj if isinstance(mapping.obj, list) else [mapping.obj]
+    boxes = mapping.tokens
 
     for box in boxes:
         for node in box.traverse():
@@ -281,15 +286,6 @@ def paint(t):
 
     update_characters(t)
     update_cursor(t)
-
-    if t % 5 < 0.1:
-        imglayer.clear()
-
-    w = editor.width
-    h = editor.height
-    x = math.sin(t)*w/2
-    y = math.sin(t*7.0)*h/8
-    imglayer.patch9((w/2-x, 100+y, w/2+x, 200+y), imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
 
     imglayer.render(editor.scroll_x, editor.scroll_y, width, height)
     fontlayer.render(editor.scroll_x, editor.scroll_y, width, height)

@@ -77,11 +77,17 @@ class ImageLayer(object):
         self.vertices.extend((x, y, s, t, r, g, b, a))
         self.vertexcount += 1
 
+    def rect(self, (x, y, w, h), coords, color):
+        self.quad((x, y, x+w, y+h), coords, color)
+
     def quad(self, (x0, y0, x1, y1), (s0, t0, s1, t1), (r, g, b, a)):
         self.vertex(x0, y0, s0, t0, r, g, b, a)
         self.vertex(x0, y1, s0, t1, r, g, b, a)
         self.vertex(x1, y1, s1, t1, r, g, b, a)
         self.vertex(x1, y0, s1, t0, r, g, b, a)
+
+    def patch9_rect(self, (x, y, w, h), coords, color):
+        self.patch9((x, y, x+w, y+h), coords, color)
 
     def patch9(self, (x0, y0, x3, y3), (s0, t0, s1, t1, s2, t2, s3, t3), color):
         if x3 < x0:

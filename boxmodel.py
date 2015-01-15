@@ -1,10 +1,12 @@
 class Frame(object):
     parent = None
+    clue = None
     def traverse(self):
         yield self
 
 class LetterBox(Frame):
     render = 1
+    clue = 'horizontal'
     def __init__(self, width, height, depth, font, texcoords, padding, color):
         self.width  = width
         self.height = height
@@ -15,11 +17,13 @@ class LetterBox(Frame):
         self.color = color
 
 class Glue(Frame):
+    clue = 'horizontal'
     render = 2
     def __init__(self, width):
         self.width = width
 
 class Caret(Frame):
+    clue = 'hoist'
     render = 0
     def __init__(self, subj, index):
         self.subj = subj
