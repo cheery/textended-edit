@@ -171,22 +171,24 @@ def lisp_layout(mapping):
         return prefix + sans(node, fontsize, color=green) + postfix
     elif isinstance(node.contents, list):
         tokens = []
-        tokens.extend(sans('(', fontsize, color=gray))
         if len(node.label) > 0:
             tokens.extend(sans(node.label, fontsize, color=blue))
         for submapping in mapping:
             if submapping.index > 0 or len(node.label) > 0:
                 tokens.extend(sans(' ', fontsize))
             tokens.extend(submapping.apply(lisp_layout))
-        tokens.extend(sans(')', fontsize, color=gray))
-        width = sum(token.width for token in tokens if token.render > 0)
+        width = sum(token.width for token in tokens if isinstance(token, boxmodel.Frame))
         if width > 300:
-            return [vmode(tokens)]
+            return [vmode(tokens, indent=10)]
         else:
+            tokens = sans('(', fontsize, color=gray) + tokens
+            tokens = tokens + sans(')', fontsize, color=gray)
             return [boxmodel.hpack(tokens)]
 
 def build_boxmodel(editor):
     editor.mappings.clear()
+    if editor.document.body.type != 'list':
+        return boxmodel.hpack(sans(editor.document.body, fontsize))
     mapping = Mapping(editor.mappings, editor.document.body)
     def layout(mapping):
         for submapping in mapping:
@@ -195,7 +197,7 @@ def build_boxmodel(editor):
     mapping.apply(layout)
     return vmode(mapping.tokens)
 
-def vmode(tokens):
+def vmode(tokens, indent=0):
     state = 'vertical'
     hoist = []
     frames = []
@@ -207,17 +209,23 @@ def vmode(tokens):
             hoist.append(token)
         else:
             if state == 'horizontal':
-                frames.append(boxmodel.hpack(hoist))
+                hbox = boxmodel.hpack(hoist)
+                if len(frames) > 0:
+                    hbox.shift += indent
+                frames.append(hbox)
                 hoist = []
             else:
                 frames.extend(hoist)
                 hoist[:] = ()
+            if len(frames) > 0 and isinstance(token, boxmodel.Box):
+                token.shift += indent
             frames.append(token)
             state = 'vertical'
     if state == 'horizontal':
-        frames.append(boxmodel.hpack(hoist))
-        hoist = []
+        hbox = boxmodel.hpack(hoist)
+        if len(frames) > 0:
+            hbox.shift += indent
+        frames.append(hbox)
     else:
         frames.extend(hoist)
-        hoist[:] = ()
     return boxmodel.vpack(frames)

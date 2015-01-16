@@ -1,16 +1,25 @@
 class Frame(object):
     parent = None
+    rect = None
     clue = None
     def traverse(self):
         yield self
 
-class LetterBox(Frame):
-    render = 1
+class Box(Frame):
+    def __init__(self, width, height, depth):
+        self.width = width
+        self.height = height
+        self.depth = depth
+        self.shift = 0
+
+    @property
+    def vsize(self):
+        return self.height + self.depth
+
+class LetterBox(Box):
     clue = 'horizontal'
     def __init__(self, width, height, depth, font, texcoords, padding, color):
-        self.width  = width
-        self.height = height
-        self.depth  = depth
+        Box.__init__(self, width, height, depth)
         self.font = font
         self.texcoords = texcoords
         self.padding = padding
@@ -18,19 +27,33 @@ class LetterBox(Frame):
 
 class Glue(Frame):
     clue = 'horizontal'
-    render = 2
-    def __init__(self, width):
+    def __init__(self, width, shrink=0, stretch=0):
         self.width = width
+        self.shrink = shrink
+        self.stretch = stretch
 
-class Caret(Frame):
+    @property
+    def vsize(self):
+        return self.width
+
+class Caret(object):
+    parent = None
     clue = 'hoist'
-    render = 0
     def __init__(self, subj, index):
         self.subj = subj
         self.index = index
         self.rect = None
 
-class Composite(Frame):
+    def traverse(self):
+        yield self
+
+class Composite(Box):
+    def __init__(self, width, height, depth, contents):
+        Box.__init__(self, width, height, depth)
+        self.contents = contents
+        for node in contents:
+            node.parent = self
+
     def index(self, obj):
         return self.contents.index(obj)
 
@@ -46,60 +69,30 @@ class Composite(Frame):
             for node in node.traverse():
                 yield node
 
-class HBox(Composite):
-    render = 1
-    def __init__(self, width, height, depth, contents):
-        self.width = width
-        self.height = height
-        self.depth = depth
-        self.contents = contents
-        self.rect = None
-        _parent(self, contents)
-
 class VBox(Composite):
-    render = 1
-    def __init__(self, width, height, depth, contents):
-        self.width = width
-        self.height = height
-        self.depth = depth
-        self.contents = contents
-        self.rect = None
-        _parent(self, contents)
+    pass
 
-def _parent(subj, contents):
-    for node in contents:
-        node.parent = subj
+class HBox(Composite):
+    pass
 
 def hpack(contents):
-    try: # "rather ask for forgiveness than permission" ...oh and keep an eye on that landmine.
-        width = sum(node.width for node in contents if node.render > 0)
-    except ValueError as v:
-        width = 10
-    try:
-        height = max(node.height for node in contents if node.render == 1)
-    except ValueError as v:
-        height = 10
-    try:
-        depth = max(node.depth for node in contents if node.render == 1)
-    except ValueError as v:
-        depth = 10
+    width = 0
+    height = 0
+    depth  = 0
+    for node in contents:
+        if isinstance(node, Frame):
+            width += node.width
+        if isinstance(node, Box):
+            height = max(height, node.height + node.shift)
+            depth = max(depth, node.depth - node.shift)
     return HBox(width, height, depth, contents)
 
 def vpack(contents):
-    try:
-        width = max(node.width for node in contents if node.render == 1)
-    except ValueError as v:
-        width = 10
-    try:
-        vsize = sum(vsize_of(node) for node in contents if node.render > 0)
-    except ValueError as v:
-        vsize = 10
+    width = 0
+    vsize = 0
+    for node in contents:
+        if isinstance(node, Frame):
+            vsize += node.vsize
+        if isinstance(node, Box):
+            width = max(width, node.width + node.shift)
     return VBox(width, 0, vsize, contents)
-
-def vsize_of(node):
-    if node.render == 0:
-        return 0
-    if node.render == 1:
-        return node.height + node.depth
-    if node.render == 2:
-        return node.width

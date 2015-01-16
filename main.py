@@ -118,7 +118,7 @@ flatlayer = renderers.FlatLayer()
 def burst(subj, x, y):
     subj.rect = x, y-subj.depth, subj.width, subj.height+subj.depth
     #imglayer.rect(subj.rect, imglayer.texcoords(None), (0.0, 0.0, 0.0, 0.02))
-    imglayer.patch9_rect(subj.rect, imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
+    #imglayer.patch9_rect(subj.rect, imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
     if isinstance(subj, boxmodel.HBox):
         x0 = x
         for node in subj.contents:
@@ -126,15 +126,15 @@ def burst(subj, x, y):
                 x0 += node.width
             elif isinstance(node, boxmodel.LetterBox):
                 x1 = x0 + node.width
-                y1 = y + node.height
-                y0 = y - node.depth
+                y1 = y + node.height + node.shift
+                y0 = y - node.depth  + node.shift
                 s0, t0, s1, t1 = node.texcoords
                 p0, p1, p2, p3 = node.padding
                 c0, c1, c2, c3 = node.color
                 fontlayer.quad((x0-p0, y0-p1, x1+p2, y1+p3), node.texcoords, node.color)
                 x0 = x1
             elif isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
-                burst(node, x0, y)
+                burst(node, x0, y + node.shift)
                 x0 += node.width
             elif isinstance(node, boxmodel.Caret):
                 node.rect = x0-0.5, y-subj.depth, 1, subj.height+subj.depth
@@ -143,8 +143,8 @@ def burst(subj, x, y):
         for node in subj.contents:
             if isinstance(node, boxmodel.Glue):
                 y0 -= node.width
-            elif isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
-                burst(node, x, y0 - node.height)
+            elif isinstance(node, boxmodel.Box):
+                burst(node, x + node.shift, y0 - node.height)
                 y0 -= node.height + node.depth
             elif isinstance(node, boxmodel.Caret):
                 node.rect = x, y0-0.5, subj.width, 1
