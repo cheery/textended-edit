@@ -183,7 +183,7 @@ def lisp_layout(mapping):
         else:
             tokens = sans('(', fontsize, color=gray) + tokens
             tokens = tokens + sans(')', fontsize, color=gray)
-            return [boxmodel.hpack(tokens)]
+            return [boxmodel.hpack(tokens, to_dimen=300)]
 
 def build_boxmodel(editor):
     editor.mappings.clear()

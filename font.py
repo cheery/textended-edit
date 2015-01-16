@@ -47,7 +47,7 @@ def load(path):
     return font
 
 class Font(object):
-    def __call__(self, text, size=16, index=0, color=(1.0, 1.0, 1.0, 1.0)):
+    def __call__(self, text, size=16, index=0, color=(1.0, 1.0, 1.0, 1.0), ws_stretch=1, ws_shrink=1):
         result = []
         kern = (0, 0)
         scale = float(size) / self.size
@@ -56,7 +56,11 @@ class Font(object):
         for ch in text:
             kern = kern[1], ord(ch)
             kern_amt = self.kernings.get(kern, 0)
-            if kern[1] not in self.characters:
+            if ch == ' ':
+                char = self.characters[ord(ch)]
+                x3 = (char['xadvance']) * scale * 0.5
+                result.append(Glue(x3, ws_shrink, ws_stretch))
+            elif kern[1] not in self.characters:
                 for ch in '\\x' + format(kern[1], '02x'):
                     char = self.characters[ord(ch)]
                     b = (self.base - char['yoffset']) * scale

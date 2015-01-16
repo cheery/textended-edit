@@ -123,7 +123,7 @@ def burst(subj, x, y):
         x0 = x
         for node in subj.contents:
             if isinstance(node, boxmodel.Glue):
-                x0 += node.width
+                x0 += node.with_expand(subj.expand)
             elif isinstance(node, boxmodel.LetterBox):
                 x1 = x0 + node.width
                 y1 = y + node.height + node.shift
@@ -142,7 +142,7 @@ def burst(subj, x, y):
         y0 = y + subj.height
         for node in subj.contents:
             if isinstance(node, boxmodel.Glue):
-                y0 -= node.width
+                y0 -= node.with_expand(subj.expand)
             elif isinstance(node, boxmodel.Box):
                 burst(node, x + node.shift, y0 - node.height)
                 y0 -= node.height + node.depth
