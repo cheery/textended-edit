@@ -280,7 +280,7 @@ def navigate(editor, sel, hcarets_fn):
 
 def find_caret(editor, subj, index):
     for frame in editor.rootbox.traverse():
-        if isinstance(frame, boxmodel.Caret):
+        if isinstance(frame, boxmodel.Caret): # temporalily broken
             if frame.subj == subj and frame.index == index:
                 return frame
 
@@ -317,7 +317,7 @@ def hcarets_below(node):
         parent = node.parent
 
 def is_hcaret(node):
-    if isinstance(node, boxmodel.Caret):
+    if isinstance(node, boxmodel.Caret): # temporarily broken
         if not isinstance(node.subj, dom.Node):
             return
         if node.subj.type != 'list' or len(node.subj) == 0:

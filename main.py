@@ -123,7 +123,9 @@ def burst(subj, x, y):
         x0 = x
         for node in subj.contents:
             if isinstance(node, boxmodel.Glue):
-                x0 += node.with_expand(subj.expand)
+                width = node.with_expand(subj.expand)
+                node.rect = x0, y-subj.depth, width, subj.depth + subj.height
+                x0 += width
             elif isinstance(node, boxmodel.LetterBox):
                 x1 = x0 + node.width
                 y1 = y + node.height + node.shift
@@ -131,23 +133,22 @@ def burst(subj, x, y):
                 s0, t0, s1, t1 = node.texcoords
                 p0, p1, p2, p3 = node.padding
                 c0, c1, c2, c3 = node.color
+                node.rect = (x0, y-subj.depth, x1-x0, subj.depth + subj.height)
                 fontlayer.quad((x0-p0, y0-p1, x1+p2, y1+p3), node.texcoords, node.color)
                 x0 = x1
             elif isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
                 burst(node, x0, y + node.shift)
                 x0 += node.width
-            elif isinstance(node, boxmodel.Caret):
-                node.rect = x0-0.5, y-subj.depth, 1, subj.height+subj.depth
     elif isinstance(subj, boxmodel.VBox):
         y0 = y + subj.height
         for node in subj.contents:
             if isinstance(node, boxmodel.Glue):
-                y0 -= node.with_expand(subj.expand)
+                vsize = node.with_expand(subj.expand)
+                node.rect = x0, y0, subj.width, vsize
+                y0 -= vsize
             elif isinstance(node, boxmodel.Box):
                 burst(node, x + node.shift, y0 - node.height)
                 y0 -= node.height + node.depth
-            elif isinstance(node, boxmodel.Caret):
-                node.rect = x, y0-0.5, subj.width, 1
 
 def update_characters(t):
     def layout_editor(editor, x, y):
@@ -178,32 +179,55 @@ def update_cursor(t):
     
     document = focus.document
     cursors = defaultdict(list)
-    if focus.selection.subj not in focus.mappings:
+    subj = focus.selection.subj
+    start = focus.selection.start
+    stop = focus.selection.stop
+    if subj not in focus.mappings:
         return
-    mapping = focus.mappings[focus.selection.subj]
+    mapping = focus.mappings[subj]
     if mapping.tokens is None:
         return
-    boxes = mapping.tokens
-
-    for box in boxes:
-        for node in box.traverse():
-            if not isinstance(node, boxmodel.Caret):
-                continue
-            if node.subj != focus.selection.subj:
-                continue
-            if node.index < focus.selection.start:
-                continue
-            if node.index > focus.selection.stop:
-                continue
-            cursors[node.parent].append(node.rect)
 
     color = (0, 1.0, 1.0, 0.5)
-    if focus.selection.subj.type == 'list':
+    if subj.type == 'list':
         color = (0, 1.0, 0.0, 0.5)
-    if focus.selection.subj.type == 'string':
+    if subj.type == 'string':
         color = (1.0, 1.0, 0.0, 0.5)
-    if focus.selection.subj.type == 'binary':
+    if subj.type == 'binary':
         color = (0.5, 0.0, 1.0, 0.5)
+
+    if subj.type == 'list':
+        if start == stop:
+            if start < len(subj):
+                submapping = focus.mappings[subj[start]]
+                x, y, w, h = submapping.tokens[0].rect
+                return flatlayer.rect((x-1, y, 1, h), color)
+            elif len(subj) > 0:
+                submapping = focus.mappings[subj[-1]]
+                x, y, w, h = submapping.tokens[-1].rect
+                return flatlayer.rect((x+w, y, 1, h), color)
+        else:
+            for subnode in subj[start:stop]:
+                submapping = focus.mappings[subnode]
+                for token in submapping.tokens:
+                    cursors[token.parent].append(token.rect)
+
+    for box in mapping.tokens:
+        for node in box.traverse():
+            if node.subj != subj:
+                continue
+            if start == stop:
+                if node.index == start:
+                    x, y, w, h = node.rect
+                    caret = (x-1, y, 1, h)
+                    return flatlayer.rect(caret, color)
+                if node.index + 1 == start:
+                    x, y, w, h = node.rect
+                    caret = (x+w, y, 1, h)
+                    return flatlayer.rect(caret, color)
+            elif start <= node.index < stop:
+                cursors[node.parent].append(node.rect)
+
     for container, cursorset in cursors.items():
         rect = rect_enclosure(cursorset)
         flatlayer.rect(rect, color)
@@ -253,6 +277,7 @@ def simplify_selection(headpos, tailpos):
 cursor_tail = None
 
 def pick_nearest(editor, x, y):
+    cursor = x, y
     def nearest(node, maxdist):
         near, distance = None, maxdist
         if isinstance(node, boxmodel.Composite):
@@ -267,17 +292,14 @@ def pick_nearest(editor, x, y):
             return near, distance
         elif is_hcaret(node):
             dx, dy = delta_point_rect(cursor, node.rect)
-            return node, dx**2 + dy**4
+            offset = (x - (node.rect[0] + node.rect[2]*0.5)) > 0
+            return Position(node.subj, node.index + offset), dx**2 + dy**4
         else:
             return None, float('inf')
     return nearest(editor.rootbox, 500**4)[0]
 
 def is_hcaret(node):
-    if isinstance(node, boxmodel.Caret):
-        if not isinstance(node.subj, dom.Node):
-            return
-        if node.subj.type != 'list' or len(node.subj) == 0:
-            return isinstance(node.parent, boxmodel.HBox)
+    return isinstance(node.subj, dom.Node)
 
 def paint(t):
     #272822
@@ -365,18 +387,20 @@ while live:
             if event.motion.state == 0:
                 cursor_tail = None
             if cursor_tail is not None:
-                node = pick_nearest(focus, event.motion.x, event.motion.y)
-                if node is not None:
-                    focus.headpos = Position(node.subj, node.index)
+                position = pick_nearest(focus, cursor[0], cursor[1])
+                if position is not None:
+                    focus.headpos = position
                     focus.selection = simplify_selection(focus.headpos, focus.tailpos)
         elif event.type == SDL_MOUSEBUTTONDOWN:
+            cursor[0] = event.motion.x
+            cursor[1] = height - event.motion.y
             sel = focus.selection
-            node = pick_nearest(focus, event.button.x, event.button.y)
-            if node is not None:
-                sel.subj = node.subj
-                sel.head = sel.tail = node.index
+            position = pick_nearest(focus, cursor[0], cursor[1])
+            if position is not None:
+                sel.subj = position.subj
+                sel.head = sel.tail = position.index
                 sel.x_anchor = None
-                cursor_tail = Position(node.subj, node.index)
+                cursor_tail = position
                 focus.headpos = focus.tailpos = cursor_tail
                 focus.selection = simplify_selection(focus.headpos, focus.tailpos)
         elif event.type == SDL_MOUSEBUTTONUP:

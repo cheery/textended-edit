@@ -1,5 +1,5 @@
 import os.path, re#, pygame
-from boxmodel import LetterBox, Glue, Caret
+from boxmodel import LetterBox, Glue, hpack
 
 def load(path):
     dirname = os.path.dirname(path)
@@ -52,26 +52,15 @@ class Font(object):
         kern = (0, 0)
         scale = float(size) / self.size
         padding = tuple(p*scale for p in self.padding)
-        result.append(Caret(text, index))
         for ch in text:
             kern = kern[1], ord(ch)
             kern_amt = self.kernings.get(kern, 0)
             if ch == ' ':
                 char = self.characters[ord(ch)]
                 x3 = (char['xadvance']) * scale * 0.5
-                result.append(Glue(x3, ws_shrink, ws_stretch))
+                result.append(Glue(x3, ws_shrink, ws_stretch).set_subj(text, index))
             elif kern[1] not in self.characters:
-                for ch in '\\x' + format(kern[1], '02x'):
-                    char = self.characters[ord(ch)]
-                    b = (self.base - char['yoffset']) * scale
-                    w = char['width'] * scale * 0.5
-                    h = char['height'] * scale
-                    x1 = char['xoffset'] * scale * 0.5
-                    x2 = x1 + w
-                    x3 = (char['xadvance']) * scale * 0.5
-                    result.append(Glue(x1))
-                    result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding, color))
-                    result.append(Glue(x3 - x2))
+                result.append(self.repr_character(kern[1], padding, color).set_subj(text, index))
             else:
                 char = self.characters[kern[1]]
                 b = (self.base - char['yoffset']) * scale
@@ -81,8 +70,23 @@ class Font(object):
                 x2 = x1 + w
                 x3 = (char['xadvance'] + kern_amt) * scale
                 result.append(Glue(x1))
-                result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding, color))
+                result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding, color).set_subj(text, index))
                 result.append(Glue(x3 - x2))
             index += 1
-            result.append(Caret(text, index))
+        result.append(Glue(0).set_subj(text, index))
         return result
+
+    def repr_character(self, chnum, padding, color):
+        result = []
+        for ch in '\\x' + format(kern[1], '02x'):
+            char = self.characters[ord(ch)]
+            b = (self.base - char['yoffset']) * scale
+            w = char['width'] * scale * 0.5
+            h = char['height'] * scale
+            x1 = char['xoffset'] * scale * 0.5
+            x2 = x1 + w
+            x3 = (char['xadvance']) * scale * 0.5
+            result.append(Glue(x1))
+            result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding, color).set_subj(text, index))
+            result.append(Glue(x3 - x2))
+        return hpack(result)

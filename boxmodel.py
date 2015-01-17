@@ -2,8 +2,15 @@ class Frame(object):
     parent = None
     rect = None
     clue = None
+    subj = None
+    index = -1
     def traverse(self):
         yield self
+
+    def set_subj(self, subj, index=0):
+        self.subj = subj
+        self.index = index
+        return self
 
 class Box(Frame):
     def __init__(self, width, height, depth):
@@ -41,17 +48,6 @@ class Glue(Frame):
             return self.width + expand.real * self.shrink.real
         else:
             return self.width + expand.real * self.stretch.real
-
-class Caret(object):
-    parent = None
-    clue = 'hoist'
-    def __init__(self, subj, index):
-        self.subj = subj
-        self.index = index
-        self.rect = None
-
-    def traverse(self):
-        yield self
 
 class Composite(Box):
     def __init__(self, width, height, depth, contents):
