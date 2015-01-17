@@ -251,7 +251,10 @@ def paste_document(event):
 
 @insert.key('f5')
 def evaluate_document(event):
-    tpython.evaluate_document(event.editor.document)
+    try:
+        tpython.evaluate_document(event.editor.document)
+    except tpython.SemanticErrors as ser:
+        event.editor.create_layer(ser.document)
 
 @insert.key('up')
 def insert_up(event):

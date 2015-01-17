@@ -25,6 +25,7 @@ class Editor(object):
     def __init__(self, document, selection, x=0, y=0, width=200, height=200):
         self.document = document
         self.selection = selection
+        self.layers = []
         self.x = x
         self.y = y
         self.width = width
@@ -59,6 +60,19 @@ class Editor(object):
         self.children.append(subeditor)
         subeditor.parent = self
         return subeditor
+
+    def create_layer(self, document):
+        print 'layer created'
+        layer = EditorLayer(document)
+        layer.build_bridge = self.build_rootbox
+        self.layers.append(layer)
+        return layer
+
+class EditorLayer(object):
+    def __init__(self, document):
+        self.document = document
+        self.filename = None
+        self.ver = 0
 
 module = sys.modules[__name__]
 

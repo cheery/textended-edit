@@ -1,5 +1,9 @@
 import dom
 
+class SemanticErrors(Exception):
+    def __init__(self, document):
+        self.document = document
+
 def compile_expression(expr):
     if expr.type == 'symbol':
         symbol = expr[:]
@@ -20,6 +24,7 @@ def evaluate_document(document):
     if language != 'python':
         return
     statements = []
+    errors = []
     for item in document.body:
         if item.label == 'language':
             assert item[:] == 'python'
@@ -28,8 +33,10 @@ def evaluate_document(document):
             statements.append(statement)
         else:
             if isinstance(item, dom.Literal):
-                print "error at ", repr(item.ident)
-            print "should present the error in the editor"
-            print document.nodes
-            return
+                errors.append(
+                    dom.Literal("", u"reference", [
+                        dom.Literal("", u"", item.ident),
+                        dom.Literal("", u"", [dom.Literal("", u"", u"unknown node")])]))
+    if errors:
+        raise SemanticErrors(dom.Document(dom.Literal("", u"", errors)))
     exec compile(ast.Module(statements), "t+", 'exec')
