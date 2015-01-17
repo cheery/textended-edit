@@ -266,7 +266,7 @@ def navigate(editor, sel, hcarets_fn):
     if caret is None:
         return
     if sel.x_anchor is None:
-        sel.x_anchor = caret.rect[0]
+        sel.x_anchor = caret.rect[0] + (caret.index + 1 == sel.head) * caret.rect[2]
     def nearest(node):
         x,y,w,h = node.rect
         return abs(x - sel.x_anchor)
@@ -280,9 +280,8 @@ def navigate(editor, sel, hcarets_fn):
 
 def find_caret(editor, subj, index):
     for frame in editor.rootbox.traverse():
-        if isinstance(frame, boxmodel.Caret): # temporalily broken
-            if frame.subj == subj and frame.index == index:
-                return frame
+        if frame.subj == subj and (frame.index == index or frame.index + 1 == index):
+            return frame
 
 def hcarets_above(node):
     parent = node.parent
@@ -317,11 +316,7 @@ def hcarets_below(node):
         parent = node.parent
 
 def is_hcaret(node):
-    if isinstance(node, boxmodel.Caret): # temporarily broken
-        if not isinstance(node.subj, dom.Node):
-            return
-        if node.subj.type != 'list' or len(node.subj) == 0:
-            return isinstance(node.parent, boxmodel.HBox)
+    return isinstance(node.subj, dom.Node)
 
 @node_insert.key('left alt')
 def node_insert_editor(event):
