@@ -166,7 +166,7 @@ def update_characters(t):
                 continue
             bridge.rootbox = bridge.layer.build_rootbox(bridge.mappings, bridge.body)
             x0, y0, x1, y1 = editor.mappings[referenced].tokens[0].quad
-            imglayer.patch9((x0,y0,x1,y1), imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
+            editor.compositor.decor((x0,y0,x1,y1), boxmodel.Patch9("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
             bridge.y = y0
             sectors.append(bridge)
         sectors.sort(key=lambda b: b.y)
