@@ -143,68 +143,61 @@ def decor(quad, source, color):
     if color is None:
         color = 1, 1, 1, 1
     if isinstance(source, boxmodel.Patch9):
-        print 'patch9'
-        print imglayer.patch9_texcoords(source.source)
         imglayer.patch9(quad, imglayer.patch9_texcoords(source.source), color)
     else:
         imglayer.quad(quad, imglayer.texcoords(source), color)
 
-def burst(subj, x, y):
-    subj.rect = x, y-subj.depth, subj.width, subj.height+subj.depth
-    #imglayer.rect(subj.rect, imglayer.texcoords(None), (0.0, 0.0, 0.0, 0.02))
-    #imglayer.patch9_rect(subj.rect, imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
-    if isinstance(subj, boxmodel.Padding):
-        left, top, right, bottom = subj.padding
-        x0 = x + left
-        if subj.background is not None or subj.color is not None:
-            quad = x, y-subj.depth, x+subj.width, y+subj.height
-            decor(quad, subj.background, subj.color)
-        for node in subj.contents:
-            if isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
-                burst(node, x0, y + node.shift)
-            else:
-                assert False
-    elif isinstance(subj, boxmodel.HBox):
+debug_composer = False
+
+def compose(subj, x, y):
+    subj.quad = x, y-subj.height, x+subj.width, y+subj.depth
+    if debug_composer:
+        imglayer.patch9(subj.quad, imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
+    if isinstance(subj, boxmodel.HBox):
         x0 = x
         for node in subj.contents:
             if isinstance(node, boxmodel.Glue):
-                width = node.with_expand(subj.expand)
-                node.rect = x0, y-subj.depth, width, subj.depth + subj.height
-                x0 += width
-            elif isinstance(node, boxmodel.ImageBox):
-                x1 = x0 + node.width
-                y1 = y + node.height + node.shift
-                y0 = y - node.depth  + node.shift
-                decor((x0, y0, x1, y1), node.source, node.color)
-                x0 = x1
-            elif isinstance(node, boxmodel.LetterBox):
-                x1 = x0 + node.width
-                y1 = y + node.height + node.shift
-                y0 = y - node.depth  + node.shift
-                s0, t0, s1, t1 = node.texcoords
-                p0, p1, p2, p3 = node.padding
-                c0, c1, c2, c3 = node.color
-                node.rect = (x0, y-subj.depth, x1-x0, subj.depth + subj.height)
-                fontlayer.quad((x0-p0, y0-p1, x1+p2, y1+p3), node.texcoords, node.color)
-                x0 = x1
-            elif isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
-                burst(node, x0, y + node.shift)
+                size = node.with_expand(subj.expand)
+                node.quad = x0, subj.quad[1], x0+size, subj.quad[3]
+                x0 += size
+                if debug_composer:
+                    imglayer.quad(node.quad, imglayer.texcoords(None), (0.0, 1.0, 0.0, 0.2))
+            else:
+                compose(node, x0, y + node.shift)
                 x0 += node.width
     elif isinstance(subj, boxmodel.VBox):
-        y0 = y + subj.height
+        y0 = y
         for node in subj.contents:
             if isinstance(node, boxmodel.Glue):
-                vsize = node.with_expand(subj.expand)
-                node.rect = x, y0, subj.width, vsize
-                y0 -= vsize
-            elif isinstance(node, boxmodel.Box):
-                burst(node, x + node.shift, y0 - node.height)
-                y0 -= node.height + node.depth
+                size = node.with_expand(subj.expand)
+                node.quad = subj.quad[0], y0, subj.quad[2], y0+size
+                y0 += size
+                if debug_composer:
+                    imglayer.quad(node.quad, imglayer.texcoords(None), (1.0, 1.0, 0.0, 0.2))
+            else:
+                compose(node, x + node.shift, y0 + node.height)
+                y0 += node.vsize
+    elif isinstance(subj, boxmodel.Padding):
+        left, top, right, bottom = subj.padding
+        x0 = x + left
+        if subj.background is not None or subj.color is not None:
+            decor(subj.quad, subj.background, subj.color)
+        for node in subj.contents:
+            if isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
+                compose(node, x0, y + node.shift)
+            else:
+                assert False
+    elif isinstance(subj, boxmodel.ImageBox):
+        decor(subj.quad, subj.source, subj.color)
+    elif isinstance(subj, boxmodel.LetterBox):
+        x0, y0, x1, y1 = subj.quad
+        p0, p1, p2, p3 = subj.padding
+        fontlayer.quad((x0-p0, y0-p1, x1+p2, y1+p3), subj.texcoords, subj.color)
 
 def update_characters(t):
     def layout_editor(editor, x, y):
         editor.rootbox = editor.build_rootbox(editor.mappings, editor.document.body)
-        burst(editor.rootbox, editor.x+x, editor.height - editor.y+y)
+        compose(editor.rootbox, 10, 10)
         for subeditor in editor.children:
             layout_editor(subeditor, x+editor.x, y+editor.y)
     if editor.rootbox is None or editor.document.ver != editor.ver:
@@ -221,16 +214,16 @@ def update_characters(t):
             if referenced not in editor.mappings:
                 continue
             bridge.rootbox = bridge.layer.build_rootbox(bridge.mappings, bridge.body)
-            x, y, w, h = editor.mappings[referenced].tokens[0].rect
-            imglayer.patch9_rect((x,y,w,h), imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
-            bridge.y = y+h
+            x0, y0, x1, y1 = editor.mappings[referenced].tokens[0].quad
+            imglayer.patch9((x0,y0,x1,y1), imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
+            bridge.y = y0
             sectors.append(bridge)
         sectors.sort(key=lambda b: b.y)
-        max_y = editor.height
-        for sector in sectors:
-            y = min(sector.y, max_y)
-            burst(bridge.rootbox, editor.rootbox.width + 50, y)
-            max_y = y - bridge.rootbox.vsize
+        max_y = 0
+        for bridge in sectors:
+            y = max(bridge.y, max_y)
+            compose(bridge.rootbox, editor.rootbox.width + 50, y)
+            max_y = y + bridge.rootbox.vsize
 
 def collect_bridges(layer):
     for node in layer.document.body:
@@ -244,12 +237,10 @@ def collect_bridges(layer):
                     target = subnode
             yield Bridge(layer, reference, target)
 
-def delta_point_rect(point, rect):
-    x0, y0 = point
-    x, y, w, h = rect
-    x1 = min(max(x0, x), x+w)
-    y1 = min(max(y0, y), y+h)
-    return (x1-x0), (y1-y0)
+def delta_point_quad(point, quad):
+    x, y = point
+    x0, y0, x1, y1 = quad
+    return min(max(x0, x), x1) - x, min(max(y0, y), y1) - y
 
 cursor = [0, 0]
 def update_cursor(t):
@@ -282,17 +273,17 @@ def update_cursor(t):
         if start == stop:
             if start < len(subj):
                 submapping = focus.mappings[subj[start]]
-                x, y, w, h = submapping.tokens[0].rect
-                return flatlayer.rect((x-1, y, 1, h), color)
+                x0, y0, x1, y1 = submapping.tokens[0].quad
+                return flatlayer.quad((x0-1, y0, x0, y1), color)
             elif len(subj) > 0:
                 submapping = focus.mappings[subj[-1]]
-                x, y, w, h = submapping.tokens[-1].rect
-                return flatlayer.rect((x+w, y, 1, h), color)
+                x0, y0, x1, y1 = submapping.tokens[-1].quad
+                return flatlayer.quad((x1-1, y0, x1, y1), color)
         else:
             for subnode in subj[start:stop]:
                 submapping = focus.mappings[subnode]
                 for token in submapping.tokens:
-                    cursors[token.parent].append(token.rect)
+                    cursors[token.parent].append(token.quad)
 
     for box in mapping.tokens:
         for node in box.traverse():
@@ -300,30 +291,28 @@ def update_cursor(t):
                 continue
             if start == stop:
                 if node.index == start:
-                    x, y, w, h = node.rect
-                    caret = (x-1, y, 1, h)
-                    return flatlayer.rect(caret, color)
+                    x0, y0, x1, y1 = node.quad
+                    caret = (x0-1, y0, x0, y1)
+                    return flatlayer.quad(caret, color)
                 if node.index + 1 == start:
-                    x, y, w, h = node.rect
-                    caret = (x+w, y, 1, h)
-                    return flatlayer.rect(caret, color)
+                    x0, y0, x1, y1 = node.quad
+                    caret = (x1-1, y0, x1, y1)
+                    return flatlayer.quad(caret, color)
             elif start <= node.index < stop:
-                cursors[node.parent].append(node.rect)
+                cursors[node.parent].append(node.quad)
 
     for container, cursorset in cursors.items():
-        rect = rect_enclosure(cursorset)
-        flatlayer.rect(rect, color)
+        quad = quad_enclosure(cursorset)
+        flatlayer.quad(quad, color)
 
-def rect_enclosure(rects):
-    x0, y0, w0, h0 = rects[0]
-    x2 = x0+w0
-    y2 = y0+h0
-    for x1, y1, w1, h1 in rects[1:]:
-        x2 = max(x2, x1+w1)
-        y2 = max(y2, y1+h1)
-        x0 = min(x0, x1)
-        y0 = min(y0, y1)
-    return x0, y0, x2-x0, y2-y0
+def quad_enclosure(quads):
+    x0, y0, x1, y1 = quads[0]
+    for x2, y2, x3, y3 in quads[1:]:
+        x0 = min(x0, x2)
+        y0 = min(y0, y2)
+        x1 = max(x1, x3)
+        y1 = max(y1, y3)
+    return x0, y0, x1, y1
 
 def hierarchy_of(node):
     result = [node]
@@ -363,7 +352,7 @@ def pick_nearest(editor, x, y):
     def nearest(node, maxdist):
         near, distance = None, maxdist
         if isinstance(node, boxmodel.Composite):
-            dx, dy = delta_point_rect(cursor, node.rect)
+            dx, dy = delta_point_quad(cursor, node.quad)
             if dx**2 + dy**4 > maxdist:
                 return near, distance
             for child in node:
@@ -373,8 +362,8 @@ def pick_nearest(editor, x, y):
                     distance = d
             return near, distance
         elif is_hcaret(node):
-            dx, dy = delta_point_rect(cursor, node.rect)
-            offset = (x - (node.rect[0] + node.rect[2]*0.5)) > 0
+            dx, dy = delta_point_quad(cursor, node.quad)
+            offset = (x - (node.quad[0] + node.quad[2])*0.5) > 0
             return Position(node.subj, node.index + offset), dx**2 + dy**4
         else:
             return None, float('inf')
@@ -391,9 +380,10 @@ def paint(t):
     update_characters(t)
     update_cursor(t)
 
-    imglayer.render(editor.scroll_x, editor.scroll_y, width, height)
-    fontlayer.render(editor.scroll_x, editor.scroll_y, width, height)
-    flatlayer.render(editor.scroll_x, editor.scroll_y, width, height)
+    scale = 1.0
+    imglayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
+    fontlayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
+    flatlayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
 
 modifiers = {
     KMOD_LSHIFT:  'left shift',
@@ -465,7 +455,7 @@ while live:
                 editor.ver = 0
         elif event.type == SDL_MOUSEMOTION:
             cursor[0] = event.motion.x
-            cursor[1] = height - event.motion.y
+            cursor[1] = event.motion.y
             if event.motion.state == 0:
                 cursor_tail = None
             if cursor_tail is not None:
@@ -475,7 +465,7 @@ while live:
                     focus.selection = simplify_selection(focus.headpos, focus.tailpos)
         elif event.type == SDL_MOUSEBUTTONDOWN:
             cursor[0] = event.motion.x
-            cursor[1] = height - event.motion.y
+            cursor[1] = event.motion.y
             sel = focus.selection
             position = pick_nearest(focus, cursor[0], cursor[1])
             if position is not None:

@@ -28,13 +28,9 @@ def load(path):
         characters[options['id']] = options
         options['texcoords'] = (
             float(options['x']) / width,
-            float(options['y'] + options['height']) / height,
+            float(options['y']) / height,
             float(options['x'] + options['width']) / width,
-            float(options['y']) / height)
-        options['s0'] = float(options['x']) / width
-        options['s1'] = float(options['x'] + options['width']) / width
-        options['t0'] = float(options['y'] + options['height']) / height
-        options['t1'] = float(options['y']) / height
+            float(options['y'] + options['height']) / height)
     font.characters = characters
     kernings = {}
     for data in re.findall(r"^kerning +(.*) +$", fontspec, re.M):

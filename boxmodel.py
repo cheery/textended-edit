@@ -1,6 +1,6 @@
 class Frame(object):
     parent = None
-    rect = None
+    quad = None
     clue = None
     subj = None
     index = -1

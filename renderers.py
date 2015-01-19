@@ -47,7 +47,8 @@ class ImageLayer(object):
         varying vec2 v_texcoord;
         varying vec4 v_color;
         void main() {
-            gl_Position = vec4((position - scroll) / resolution * 2.0 - 1.0, 0.0, 1.0);
+            vec2 p = (position - scroll) / resolution * 2.0 - 1.0;
+            gl_Position = vec4(p.x, -p.y, 0.0, 1.0);
             v_texcoord = texcoord;
             v_color = color;
         }""", GL_VERTEX_SHADER)
@@ -77,17 +78,11 @@ class ImageLayer(object):
         self.vertices.extend((x, y, s, t, r, g, b, a))
         self.vertexcount += 1
 
-    def rect(self, (x, y, w, h), coords, color):
-        self.quad((x, y, x+w, y+h), coords, color)
-
     def quad(self, (x0, y0, x1, y1), (s0, t0, s1, t1), (r, g, b, a)):
         self.vertex(x0, y0, s0, t0, r, g, b, a)
         self.vertex(x0, y1, s0, t1, r, g, b, a)
         self.vertex(x1, y1, s1, t1, r, g, b, a)
         self.vertex(x1, y0, s1, t0, r, g, b, a)
-
-    def patch9_rect(self, (x, y, w, h), coords, color):
-        self.patch9((x, y, x+w, y+h), coords, color)
 
     def patch9(self, (x0, y0, x3, y3), (s0, t0, s1, t1, s2, t2, s3, t3), color):
         if x3 < x0:
@@ -99,9 +94,9 @@ class ImageLayer(object):
         dy0 = (t1-t0)*self.width
         dy1 = (t3-t2)*self.height
         x1 = x0 + dx0
-        y1 = y0 - dy0
+        y1 = y0 + dy0
         x2 = x3 - dx1
-        y2 = y3 + dy1
+        y2 = y3 - dy1
         self.quad((x0, y0, x1, y1), (s0, t0, s1, t1), color)
         self.quad((x1, y0, x2, y1), (s1, t0, s2, t1), color)
         self.quad((x2, y0, x3, y1), (s2, t0, s3, t1), color)
@@ -124,10 +119,10 @@ class ImageLayer(object):
         y_stripe = [i for i in range(1, height) if pixels[i*4*width] == '\x00']
         s1 = s0 + float(x_stripe[0])  / self.width
         s2 = s0 + float(x_stripe[-1]) / self.width
-        t2 = t3 + float(y_stripe[0]) / self.height
-        t1 = t3 + float(y_stripe[-1]) / self.height
+        t1 = t0 + float(y_stripe[0]) / self.height
+        t2 = t0 + float(y_stripe[-1]) / self.height
         s0 += 1.0 / self.width
-        t3 += 1.0 / self.height
+        t0 += 1.0 / self.height
         self.patch9_metrics[path] = tx = s0, t0, s1, t1, s2, t2, s3, t3
         return tx
 
@@ -146,9 +141,9 @@ class ImageLayer(object):
         item = self.allocator.allocate(width, height, source)
         self.subtextures[path] = tx = (
             float(item.x) / self.width,
-            float(item.y + item.height) / self.height,
-            float(item.x + item.width) / self.width,
             float(item.y) / self.height,
+            float(item.x + item.width) / self.width,
+            float(item.y + item.height) / self.height,
         )
         return tx
 
@@ -225,8 +220,9 @@ class FontLayer(object):
         varying vec2 v_texcoord;
         varying vec4 v_color;
         void main() {
+            vec2 p = (position - scroll) / resolution * 2.0 - 1.0;
+            gl_Position = vec4(p.x, -p.y, 0.0, 1.0);
             v_texcoord = texcoord;
-            gl_Position = vec4((position - scroll) / resolution * 2.0 - 1.0, 0.0, 1.0);
             v_color = color;
         }""", GL_VERTEX_SHADER)
         fragment = shaders.compileShader("""
@@ -317,8 +313,9 @@ class FlatLayer(object):
 
         varying vec4 v_color;
         void main() {
+            vec2 p = (position - scroll) / resolution * 2.0 - 1.0;
+            gl_Position = vec4(p.x, -p.y, 0.0, 1.0);
             v_color = color;
-            gl_Position = vec4((position - scroll) / resolution * 2.0 - 1.0, 0.0, 1.0);
         }""", GL_VERTEX_SHADER)
         fragment = shaders.compileShader("""
         varying vec4 v_color;
@@ -342,11 +339,11 @@ class FlatLayer(object):
         self.vertexcount += 1
         self.dirty = True
 
-    def rect(self, (x, y, w, h), (r, g, b, a)):
-        self.vertex(x, y, r, g, b, a)
-        self.vertex(x+w, y, r, g, b, a)
-        self.vertex(x+w, y+h, r, g, b, a)
-        self.vertex(x, y+h, r, g, b, a)
+    def quad(self, (x0, y0, x1, y1), (r, g, b, a)):
+        self.vertex(x0, y0, r, g, b, a)
+        self.vertex(x1, y0, r, g, b, a)
+        self.vertex(x1, y1, r, g, b, a)
+        self.vertex(x0, y1, r, g, b, a)
 
     def render(self, scroll_x, scroll_y, width, height):
         if len(self.vertices) == 0:
