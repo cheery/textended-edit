@@ -154,7 +154,9 @@ def lisp_layout(mapping):
         return sans(mapping.subj, fontsize)
     elif check_literal(node, "rgb", "string"):
         color = node[:]
-        if len(color) == 3:
+        if any(ch not in '0123456789abcdefABCDEF' for ch in color):
+            r = g = b = 0.0
+        elif len(color) == 3:
             r, g, b = [16 * int(channel, 16) / 255.0 for channel in color]
         elif len(color) == 6:
             r, g, b = [int(a+b, 16) / 255.0 for a, b in zip(color[0::2], color[1::2])]
