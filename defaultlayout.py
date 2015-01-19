@@ -5,6 +5,7 @@ sans = font.load('OpenSans.fnt')
 fontsize = 10
 fontsize_small = 6
 
+white  = 1.0, 1.0, 1.0, 1.0
 blue   = 0.5, 0.5, 1.0, 1.0
 green  = 1.0, 1.0, 0.0, 1.0
 yellow = 1.0, 1.0, 0.0, 1.0
@@ -151,6 +152,18 @@ def lisp_layout(mapping):
     node = mapping.subj
     if isinstance(node, dom.Symbol):
         return sans(mapping.subj, fontsize)
+    elif check_literal(node, "rgb", "string"):
+        color = node[:]
+        if len(color) == 3:
+            r, g, b = [16 * int(channel, 16) / 255.0 for channel in color]
+        elif len(color) == 6:
+            r, g, b = [int(a+b, 16) / 255.0 for a, b in zip(color[0::2], color[1::2])]
+        else:
+            r = g = b = 0.0
+        prefix = [boxmodel.ImageBox(10, 9, 1, source=None, color=(r, g, b, 1.0))]
+        prefix += [boxmodel.Glue(4)]
+        prefix += sans("#", fontsize, color=white)
+        return prefix + sans(node, fontsize, color=white)
     elif isinstance(node.contents, str):
         if len(node.label) > 0:
             prefix = sans(node.label, fontsize, color=blue)

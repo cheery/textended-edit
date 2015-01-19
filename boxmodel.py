@@ -32,6 +32,13 @@ class LetterBox(Box):
         self.padding = padding
         self.color = color
 
+class ImageBox(Box):
+    clue = 'horizontal'
+    def __init__(self, width, height, depth, source, color):
+        Box.__init__(self, width, height, depth)
+        self.source = source
+        self.color = color
+
 class Glue(Frame):
     clue = 'horizontal'
     def __init__(self, width, shrink=0, stretch=0):

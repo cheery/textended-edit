@@ -140,6 +140,13 @@ def burst(subj, x, y):
                 width = node.with_expand(subj.expand)
                 node.rect = x0, y-subj.depth, width, subj.depth + subj.height
                 x0 += width
+            elif isinstance(node, boxmodel.ImageBox):
+                x1 = x0 + node.width
+                y1 = y + node.height + node.shift
+                y0 = y - node.depth  + node.shift
+                texcoords = imglayer.texcoords(node.source)
+                imglayer.quad((x0, y0, x1, y1), texcoords, node.color)
+                x0 = x1
             elif isinstance(node, boxmodel.LetterBox):
                 x1 = x0 + node.width
                 y1 = y + node.height + node.shift
