@@ -269,10 +269,12 @@ def navigate(editor, sel, hcarets_fn):
     if caret is None:
         return
     if sel.x_anchor is None:
-        sel.x_anchor = caret.rect[0] + (caret.index + 1 == sel.head) * caret.rect[2]
+        sel.x_anchor = caret.quad[0]
+        if caret.index + 1 == sel.head:
+            sel.x_anchor = caret.quad[2]
     def nearest(node):
-        x,y,w,h = node.rect
-        return abs(x - sel.x_anchor)
+        x0,y0,x1,y1 = node.quad
+        return abs(x0 - sel.x_anchor)
     try:
         node = min(hcarets_fn(caret), key=nearest)
     except ValueError as v:
