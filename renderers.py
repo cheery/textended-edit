@@ -36,7 +36,7 @@ class ImageLayer(object):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self.width, self.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, c_void_p(0))
 
-        vertex = shaders.compileShader("""
+        self.vertexshader = shaders.compileShader("""
         attribute vec2 position;
         attribute vec4 color;
         attribute vec2 texcoord;
@@ -52,7 +52,7 @@ class ImageLayer(object):
             v_texcoord = texcoord;
             v_color = color;
         }""", GL_VERTEX_SHADER)
-        fragment = shaders.compileShader("""
+        self.fragmentshader = shaders.compileShader("""
         uniform sampler2D texture;
 
         varying vec2 v_texcoord;
@@ -61,12 +61,19 @@ class ImageLayer(object):
         void main() {
             gl_FragColor = v_color * texture2D(texture, v_texcoord);
         }""", GL_FRAGMENT_SHADER)
-        self.shader = shaders.compileProgram(vertex, fragment)
+        self.shader = shaders.compileProgram(self.vertexshader, self.fragmentshader)
 
         self.vbo = glGenBuffers(1)
         self.vertices = []
         self.vertexcount = 0
         self.dirty = True
+
+    def close(self):
+        glDeleteTextures(self.texture)
+        glDeleteBuffers(1, [self.vbo])
+        glDeleteShader(self.vertexshader)
+        glDeleteShader(self.fragmentshader)
+        glDeleteProgram(self.shader)
 
     def clear(self):
         self.vertices[:] = []
@@ -209,7 +216,7 @@ class FontLayer(object):
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.contents.w, image.contents.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptr)
         self.texture = texture
 
-        vertex = shaders.compileShader("""
+        self.vertexshader = shaders.compileShader("""
         attribute vec2 position;
         attribute vec2 texcoord;
         attribute vec4 color;
@@ -225,7 +232,7 @@ class FontLayer(object):
             v_texcoord = texcoord;
             v_color = color;
         }""", GL_VERTEX_SHADER)
-        fragment = shaders.compileShader("""
+        self.fragmentshader = shaders.compileShader("""
         uniform sampler2D texture;
 
         varying vec2 v_texcoord;
@@ -239,12 +246,19 @@ class FontLayer(object):
             float alpha = smoothstep(0.5 - smoothing*deriv, 0.5 + smoothing*deriv, distance);
             gl_FragColor = vec4(v_color.rgb, v_color.a*alpha);
         }""", GL_FRAGMENT_SHADER)
-        self.shader = shaders.compileProgram(vertex, fragment)
+        self.shader = shaders.compileProgram(self.vertexshader, self.fragmentshader)
 
         self.vbo = glGenBuffers(1)
         self.vertices = []
         self.vertexcount = 0
         self.dirty = True
+
+    def close(self):
+        glDeleteTextures(self.texture)
+        glDeleteBuffers(1, [self.vbo])
+        glDeleteShader(self.vertexshader)
+        glDeleteShader(self.fragmentshader)
+        glDeleteProgram(self.shader)
 
     def clear(self):
         self.vertices[:] = []
@@ -304,7 +318,7 @@ class FontLayer(object):
 
 class FlatLayer(object):
     def __init__(self):
-        vertex = shaders.compileShader("""
+        self.vertexshader = shaders.compileShader("""
         attribute vec2 position;
         attribute vec4 color;
 
@@ -317,17 +331,23 @@ class FlatLayer(object):
             gl_Position = vec4(p.x, -p.y, 0.0, 1.0);
             v_color = color;
         }""", GL_VERTEX_SHADER)
-        fragment = shaders.compileShader("""
+        self.fragmentshader = shaders.compileShader("""
         varying vec4 v_color;
 
         void main() {
             gl_FragColor = v_color;
         }""", GL_FRAGMENT_SHADER)
-        self.shader = shaders.compileProgram(vertex, fragment)
+        self.shader = shaders.compileProgram(self.vertexshader, self.fragmentshader)
         self.vbo = glGenBuffers(1)
         self.vertices = []
         self.vertexcount = 0
         self.dirty = True
+
+    def close(self):
+        glDeleteBuffers(1, [self.vbo])
+        glDeleteShader(self.vertexshader)
+        glDeleteShader(self.fragmentshader)
+        glDeleteProgram(self.shader)
 
     def clear(self):
         self.vertices[:] = []

@@ -12,6 +12,7 @@ import layout
 import os
 import ast
 import defaultlayout
+from compositor import Compositor
 from OpenGL.GL import *
 from OpenGL.GL import shaders
 from ctypes import c_void_p
@@ -21,8 +22,12 @@ from dom import Position, Selection
 from ctypes import c_int, byref, c_char, POINTER, c_void_p
 from sdl2 import *
 
+debug_layout = False
+
 class Editor(object):
-    def __init__(self, document, selection, x=0, y=0, width=200, height=200):
+    def __init__(self, images, document, selection, x=0, y=0, width=200, height=200):
+        self.images = images
+        self.compositor = Compositor(images, debug_layout)
         self.document = document
         self.selection = selection
         self.layers = []
@@ -36,6 +41,7 @@ class Editor(object):
         self.bridges = []
         self.rootbox = None
         self.build_rootbox = None
+        self.position_hook = lambda editor: None
         self.update_hook = lambda editor: None
         self.close_hook = lambda editor: None
         self.filename = None
@@ -43,6 +49,14 @@ class Editor(object):
         self.scroll_x = 0
         self.scroll_y = 0
         self.parent = None
+        self.background = None
+        self.color = None
+
+    def close(self):
+        self.compositor.close()
+        self.close_hook(self)
+        if self.parent is not None:
+            self.parent.children.remove(self)
 
     def get_rect(self, node):
         if node not in self.mappings:
@@ -54,7 +68,7 @@ class Editor(object):
             return obj.rect
 
     def create_sub_editor(self, document, selection):
-        subeditor = Editor(document, selection)
+        subeditor = Editor(self.images, document, selection)
         subeditor.build_rootbox = self.build_rootbox
         subeditor.width = self.width
         subeditor.height = self.height
@@ -87,7 +101,7 @@ class Bridge(object):
 
 module = sys.modules[__name__]
 
-def create_editor():
+def create_editor(images):
     contents = []
     for path in sys.argv[1:]:
         if os.path.exists(path):
@@ -99,16 +113,10 @@ def create_editor():
         document.filename = sys.argv[1]
 
     selection = Selection.bottom(body)
-    editor = Editor(document, selection)
+    editor = Editor(images, document, selection)
     return editor
 
 SDL_Init(SDL_INIT_VIDEO)
-
-editor = create_editor()
-focus = editor
-
-editor.build_rootbox = defaultlayout.build_boxmodel
-
 SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)
 window = SDL_CreateWindow(b"textended-edit",
                           SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -122,88 +130,31 @@ SDL_GetWindowSize(window, byref(width), byref(height))
 width = width.value
 height = height.value
 
+images = renderers.ImageResources()
+
+editor = create_editor(images)
+editor.build_rootbox = defaultlayout.build_boxmodel
+focus = editor
 editor.width = width
 editor.height = height
 
-editor.x += 10
-editor.y += 10
-editor.width  -= 20
-editor.height -= 20
-
 glEnable(GL_BLEND)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-
-images = renderers.ImageResources()
-imglayer = renderers.ImageLayer(images)
-fontlayer = renderers.FontLayer(images, defaultlayout.sans)
 flatlayer = renderers.FlatLayer()
 
-
-def decor(quad, source, color):
-    if color is None:
-        color = 1, 1, 1, 1
-    if isinstance(source, boxmodel.Patch9):
-        imglayer.patch9(quad, imglayer.patch9_texcoords(source.source), color)
-    else:
-        imglayer.quad(quad, imglayer.texcoords(source), color)
-
-debug_composer = False
-
-def compose(subj, x, y):
-    subj.quad = x, y-subj.height, x+subj.width, y+subj.depth
-    if debug_composer:
-        imglayer.patch9(subj.quad, imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
-    if isinstance(subj, boxmodel.HBox):
-        x0 = x
-        for node in subj.contents:
-            if isinstance(node, boxmodel.Glue):
-                size = node.with_expand(subj.expand)
-                node.quad = x0, subj.quad[1], x0+size, subj.quad[3]
-                x0 += size
-                if debug_composer:
-                    imglayer.quad(node.quad, imglayer.texcoords(None), (0.0, 1.0, 0.0, 0.2))
-            else:
-                compose(node, x0, y + node.shift)
-                x0 += node.width
-    elif isinstance(subj, boxmodel.VBox):
-        y0 = y
-        for node in subj.contents:
-            if isinstance(node, boxmodel.Glue):
-                size = node.with_expand(subj.expand)
-                node.quad = subj.quad[0], y0, subj.quad[2], y0+size
-                y0 += size
-                if debug_composer:
-                    imglayer.quad(node.quad, imglayer.texcoords(None), (1.0, 1.0, 0.0, 0.2))
-            else:
-                compose(node, x + node.shift, y0 + node.height)
-                y0 += node.vsize
-    elif isinstance(subj, boxmodel.Padding):
-        left, top, right, bottom = subj.padding
-        x0 = x + left
-        if subj.background is not None or subj.color is not None:
-            decor(subj.quad, subj.background, subj.color)
-        for node in subj.contents:
-            if isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
-                compose(node, x0, y + node.shift)
-            else:
-                assert False
-    elif isinstance(subj, boxmodel.ImageBox):
-        decor(subj.quad, subj.source, subj.color)
-    elif isinstance(subj, boxmodel.LetterBox):
-        x0, y0, x1, y1 = subj.quad
-        p0, p1, p2, p3 = subj.padding
-        fontlayer.quad((x0-p0, y0-p1, x1+p2, y1+p3), subj.texcoords, subj.color)
-
 def update_characters(t):
-    def layout_editor(editor, x, y):
+    def layout_editor(editor):
         editor.rootbox = editor.build_rootbox(editor.mappings, editor.document.body)
-        compose(editor.rootbox, 10, 10)
+        editor.inner_width = editor.rootbox.width + 20
+        editor.inner_height = editor.rootbox.vsize + 20
+        editor.position_hook(editor)
+        editor.compositor.clear()
+        editor.compositor.decor((0, 0, editor.width, editor.height), editor.background, editor.color)
+        editor.compositor.compose(editor.rootbox, 10, 10 + editor.rootbox.height)
         for subeditor in editor.children:
-            layout_editor(subeditor, x+editor.x, y+editor.y)
+            layout_editor(subeditor)
     if editor.rootbox is None or editor.document.ver != editor.ver:
-        fontlayer.clear()
-        imglayer.clear()
-        layout_editor(editor, 0, 0)
+        layout_editor(editor)
         editor.ver = editor.document.ver
         editor.bridges = []
         for layer in editor.layers:
@@ -222,7 +173,7 @@ def update_characters(t):
         max_y = 0
         for bridge in sectors:
             y = max(bridge.y, max_y)
-            compose(bridge.rootbox, editor.rootbox.width + 50, y)
+            editor.compositor.compose(bridge.rootbox, editor.rootbox.width + 50, y)
             max_y = y + bridge.rootbox.vsize
 
 def collect_bridges(layer):
@@ -381,8 +332,11 @@ def paint(t):
     update_cursor(t)
 
     scale = 1.0
-    imglayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
-    fontlayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
+    editor.compositor.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
+    for subeditor in editor.children:
+        subeditor.compositor.render(-subeditor.x, -subeditor.y, width/scale, height/scale)
+
+
     flatlayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
 
 modifiers = {

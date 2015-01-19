@@ -336,15 +336,21 @@ def node_insert_editor(event):
     document = dom.Document(body)
     selection = dom.Selection.bottom(body)
     event.editor = event.editor.create_sub_editor(document, selection)
+    event.editor.color = (0, 0, 0, 0.9)
 
+    def position_hook(editor):
+        editor.width = editor.parent.width
+        editor.height = editor.inner_height
+        editor.x = 0
+        editor.y = editor.parent.height - editor.height
     def hook(editor):
         subj.label = editor.document.body[:]
+    event.editor.position_hook = position_hook
     event.editor.close_hook  = hook
     event.editor.update_hook = hook
 
 @insert.key('escape')
 def insert_escape(event):
     if event.editor.parent is not None:
-        event.editor.close_hook(event.editor)
-        event.editor.parent.children.remove(event.editor)
+        event.editor.close()
         event.editor = event.editor.parent
