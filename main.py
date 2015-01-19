@@ -215,13 +215,22 @@ def update_characters(t):
         editor.bridges = []
         for layer in editor.layers:
             editor.bridges.extend(collect_bridges(layer))
+        sectors = []
         for bridge in editor.bridges:
             referenced = editor.document.nodes.get(bridge.reference)
             if referenced not in editor.mappings:
                 continue
             bridge.rootbox = bridge.layer.build_rootbox(bridge.mappings, bridge.body)
             x, y, w, h = editor.mappings[referenced].tokens[0].rect
-            burst(bridge.rootbox, editor.rootbox.width + 50, y+h)
+            imglayer.patch9_rect((x,y,w,h), imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
+            bridge.y = y+h
+            sectors.append(bridge)
+        sectors.sort(key=lambda b: b.y)
+        max_y = editor.height
+        for sector in sectors:
+            y = min(sector.y, max_y)
+            burst(bridge.rootbox, editor.rootbox.width + 50, y)
+            max_y = y - bridge.rootbox.vsize
 
 def collect_bridges(layer):
     for node in layer.document.body:
