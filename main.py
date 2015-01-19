@@ -33,6 +33,7 @@ class Editor(object):
         self.children = []
         self.ver = 0
         self.mappings = {}
+        self.bridges = []
         self.rootbox = None
         self.build_rootbox = None
         self.update_hook = lambda editor: None
@@ -64,8 +65,9 @@ class Editor(object):
     def create_layer(self, document):
         print 'layer created'
         layer = EditorLayer(document)
-        layer.build_bridge = self.build_rootbox
+        layer.build_rootbox = self.build_rootbox
         self.layers.append(layer)
+        self.ver = 0
         return layer
 
 class EditorLayer(object):
@@ -73,6 +75,15 @@ class EditorLayer(object):
         self.document = document
         self.filename = None
         self.ver = 0
+        self.build_rootbox = None
+
+class Bridge(object):
+    def __init__(self, layer, reference, body):
+        self.layer = layer
+        self.reference = reference
+        self.body = body
+        self.mappings = {}
+        self.rootbox = None
 
 module = sys.modules[__name__]
 
@@ -192,7 +203,7 @@ def burst(subj, x, y):
 
 def update_characters(t):
     def layout_editor(editor, x, y):
-        editor.rootbox = editor.build_rootbox(editor)
+        editor.rootbox = editor.build_rootbox(editor.mappings, editor.document.body)
         burst(editor.rootbox, editor.x+x, editor.height - editor.y+y)
         for subeditor in editor.children:
             layout_editor(subeditor, x+editor.x, y+editor.y)
@@ -201,6 +212,28 @@ def update_characters(t):
         imglayer.clear()
         layout_editor(editor, 0, 0)
         editor.ver = editor.document.ver
+        editor.bridges = []
+        for layer in editor.layers:
+            editor.bridges.extend(collect_bridges(layer))
+        for bridge in editor.bridges:
+            referenced = editor.document.nodes.get(bridge.reference)
+            if referenced not in editor.mappings:
+                continue
+            bridge.rootbox = bridge.layer.build_rootbox(bridge.mappings, bridge.body)
+            x, y, w, h = editor.mappings[referenced].tokens[0].rect
+            burst(bridge.rootbox, editor.rootbox.width + 50, y+h)
+
+def collect_bridges(layer):
+    for node in layer.document.body:
+        if node.type == 'list' and node.label == 'reference':
+            reference = None
+            target = None
+            for subnode in node:
+                if subnode.type == 'binary':
+                    reference = subnode[:]
+                elif subnode.type == 'list':
+                    target = subnode
+            yield Bridge(layer, reference, target)
 
 def delta_point_rect(point, rect):
     x0, y0 = point

@@ -206,11 +206,11 @@ def lisp_layout(mapping):
             tokens = tokens + sans(')', fontsize, color=gray)
             return [boxmodel.hpack(tokens)]
 
-def build_boxmodel(editor):
-    editor.mappings.clear()
-    if editor.document.body.type != 'list':
-        return boxmodel.hpack(sans(editor.document.body, fontsize))
-    mapping = Mapping(editor.mappings, editor.document.body)
+def build_boxmodel(mappings, body):
+    mappings.clear()
+    if body.type != 'list':
+        return boxmodel.hpack(sans(body, fontsize))
+    mapping = Mapping(mappings, body)
     def layout(mapping):
         for submapping in mapping:
             for token in submapping.apply(lisp_layout):
