@@ -84,6 +84,18 @@ class VBox(Composite):
 class HBox(Composite):
     expand = 0
 
+class Padding(Composite):
+    def __init__(self, box, padding, background=None, color=None):
+        left, top, right, bottom = padding
+        Composite.__init__(self, box.width + left + right, box.height + top, box.depth + bottom, [box])
+        self.padding = padding
+        self.background = background
+        self.color = color
+
+class Patch9(object):
+    def __init__(self, source):
+        self.source = source
+
 def hpack(contents, to_dimen=None):
     width = 0
     height = 0

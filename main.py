@@ -128,12 +128,32 @@ fontlayer = renderers.FontLayer(images, defaultlayout.sans)
 flatlayer = renderers.FlatLayer()
 
 
+def decor(quad, source, color):
+    if color is None:
+        color = 1, 1, 1, 1
+    if isinstance(source, boxmodel.Patch9):
+        print 'patch9'
+        print imglayer.patch9_texcoords(source.source)
+        imglayer.patch9(quad, imglayer.patch9_texcoords(source.source), color)
+    else:
+        imglayer.quad(quad, imglayer.texcoords(source), color)
 
 def burst(subj, x, y):
     subj.rect = x, y-subj.depth, subj.width, subj.height+subj.depth
     #imglayer.rect(subj.rect, imglayer.texcoords(None), (0.0, 0.0, 0.0, 0.02))
     #imglayer.patch9_rect(subj.rect, imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
-    if isinstance(subj, boxmodel.HBox):
+    if isinstance(subj, boxmodel.Padding):
+        left, top, right, bottom = subj.padding
+        x0 = x + left
+        if subj.background is not None or subj.color is not None:
+            quad = x, y-subj.depth, x+subj.width, y+subj.height
+            decor(quad, subj.background, subj.color)
+        for node in subj.contents:
+            if isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
+                burst(node, x0, y + node.shift)
+            else:
+                assert False
+    elif isinstance(subj, boxmodel.HBox):
         x0 = x
         for node in subj.contents:
             if isinstance(node, boxmodel.Glue):
@@ -144,8 +164,7 @@ def burst(subj, x, y):
                 x1 = x0 + node.width
                 y1 = y + node.height + node.shift
                 y0 = y - node.depth  + node.shift
-                texcoords = imglayer.texcoords(node.source)
-                imglayer.quad((x0, y0, x1, y1), texcoords, node.color)
+                decor((x0, y0, x1, y1), node.source, node.color)
                 x0 = x1
             elif isinstance(node, boxmodel.LetterBox):
                 x1 = x0 + node.width
@@ -165,7 +184,7 @@ def burst(subj, x, y):
         for node in subj.contents:
             if isinstance(node, boxmodel.Glue):
                 vsize = node.with_expand(subj.expand)
-                node.rect = x0, y0, subj.width, vsize
+                node.rect = x, y0, subj.width, vsize
                 y0 -= vsize
             elif isinstance(node, boxmodel.Box):
                 burst(node, x + node.shift, y0 - node.height)

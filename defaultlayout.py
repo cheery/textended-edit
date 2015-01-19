@@ -164,6 +164,14 @@ def lisp_layout(mapping):
         prefix += [boxmodel.Glue(4)]
         prefix += sans("#", fontsize, color=white)
         return prefix + sans(node, fontsize, color=white)
+    elif check_literal(node, "vector", "list"):
+        tokens = []
+        for submapping in mapping:
+            tokens.extend(submapping.apply(lisp_layout))
+            glue = boxmodel.Glue(0)
+            glue.clue = None
+            tokens.append(glue)
+        return [boxmodel.Padding(vmode(tokens), (10, 10, 10, 10), boxmodel.Patch9("assets/bracket-2px.png"))]
     elif isinstance(node.contents, str):
         if len(node.label) > 0:
             prefix = sans(node.label, fontsize, color=blue)
@@ -225,6 +233,7 @@ def vmode(tokens, indent=0):
                 hbox = boxmodel.hpack(hoist)
                 if len(frames) > 0:
                     hbox.shift += indent
+                    frames.append(boxmodel.Glue(5))
                 frames.append(hbox)
                 hoist = []
             else:
@@ -232,6 +241,7 @@ def vmode(tokens, indent=0):
                 hoist[:] = ()
             if len(frames) > 0 and isinstance(token, boxmodel.Box):
                 token.shift += indent
+                frames.append(boxmodel.Glue(5))
             frames.append(token)
             state = 'vertical'
     if state == 'horizontal':
