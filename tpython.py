@@ -109,7 +109,9 @@ def symbol_alias(env, name):
 def def_statement(env, name, arglist, statements):
     return ast.FunctionDef(
         name.encode('utf-8'),
-        ast.arguments([a.encode('utf-8') for a in arglist[0]], None, None, []),
+        ast.arguments([
+            ast.Name(a.encode('utf-8'), ast.Param(), lineno=0, col_offset=0)
+            for a in arglist[0]], None, None, []),
         statements, 
         [], lineno=0, col_offset=0)
 
@@ -132,14 +134,21 @@ def string_expression(env, string):
 def attr_expression(env, subj, name):
     return ast.Attribute(subj, name.encode('utf-8'), ast.Load(), lineno=0, col_offset=0)
 
-@semantic('stmt', group('assign', symbol, 'expr'))
-def assign_expression(env, name, value):
-    target = ast.Name(name.encode('utf-8'), ast.Store(), lineno=0, col_offset=0)
+@semantic('stmt', group('assign', 'expr=', 'expr'))
+def assign_expression(env, target, value):
     return ast.Assign([target], value, lineno=0, col_offset=0)
 
 @semantic('expr', group('', 'expr', many('expr')))
 def call_expression(env, func, argv):
     return ast.Call(func, argv, [], None, None, lineno=0, col_offset=0)
+
+@semantic('expr=', symbol)
+def symbol_store(env, name):
+    return ast.Name(name.encode('utf-8'), ast.Store(), lineno=0, col_offset=0)
+
+@semantic('expr=', group('attr', 'expr', symbol))
+def attr_expression(env, subj, name):
+    return ast.Attribute(subj, name.encode('utf-8'), ast.Store(), lineno=0, col_offset=0)
 
 def put_error_string(errors, node, message):
     if isinstance(node, dom.Literal):
