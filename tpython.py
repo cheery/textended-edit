@@ -1,49 +1,145 @@
 import dom
 import ast
+from collections import defaultdict
 
-class SemanticErrors(Exception):
-    def __init__(self, document):
-        self.document = document
+grammar = defaultdict(list)
 
-def check_literal(node, label, type):
-    return isinstance(node, dom.Literal) and node.label == label and isinstance(node.contents, type)
+class group(object):
+    def __init__(self, label, *patterns):
+        self.label = label
+        self.patterns = patterns
 
-def expect_symbol(node, errors):
-    if isinstance(node, dom.Symbol):
-        return node[:].encode('utf-8')
-    else:
-        put_error_string(errors, node, "expected symbol")
+class many(object):
+    def __init__(self, pattern):
+        self.pattern = pattern
 
-def compile_expression(expr, errors):
-    if expr.type == 'symbol':
-        symbol = expr[:]
-        if symbol[:1].isdigit():
-            return ast.Num(int(symbol), lineno=0, col_offset=0)
-        else:
-            return ast.Name(symbol[:].encode('utf-8'), ast.Load(), lineno=0, col_offset=0)
-    elif expr.type == 'string':
-        return ast.Str(expr[:], lineno=0, col_offset=0)
-    elif check_literal(expr, 'attr', list) and len(expr) == 2:
-        subj = compile_expression(expr[0], errors)
-        name = expect_symbol(expr[1], errors)
-        return ast.Attribute(subj, name, ast.Load(), lineno=0, col_offset=0)
-    else:
-        put_error_string(errors, expr, "unknown semantics")
+class string_group(object):
+    def __init__(self, label=None):
+        self.label = label
 
-def compile_statement(stmt, errors):
-    if check_literal(stmt, 'print', list):
-        statement = ast.Print(None, [compile_expression(expr, errors) for expr in stmt], True, lineno=0, col_offset=0)
-        yield statement
-    elif check_literal(stmt, 'import', list):
-        imports = []
-        for node in stmt:
-            if isinstance(node, dom.Symbol):
-                imports.append(ast.alias(node[:].encode('utf-8'), None))
+def translate_pattern(env, node, pattern, func=None):
+    if isinstance(pattern, str):
+        results = []
+        for subfunc, subpattern in grammar[pattern]:
+            success, result = translate_pattern(env, node, subpattern, subfunc)
+            if success:
+                results.append(result)
+        if len(results) == 0:
+            return False, None
+        if len(results) > 1:
+            put_error_string(env.errors, node, "ambiguous as {}".format(pattern))
+            return False, None
+        if callable(func):
+            return True, func(env, *results)
+        return True, results[0]
+    elif isinstance(pattern, group):
+        if not (isinstance(node, dom.Literal) and isinstance(node.contents, list)):
+            return False, None
+        if pattern.label != node.label:
+            return False, None
+        subnodes = list(node[:])
+        listing = []
+        bad = False
+        for subpattern in pattern.patterns:
+            if isinstance(subpattern, many):
+                sublisting = []
+                while len(subnodes) > 0:
+                    subnode = subnodes.pop(0)
+                    success, result = translate_pattern(env, subnode, subpattern.pattern)
+                    sublisting.append(result)
+                    if not success:
+                        bad = True
+                        put_error_string(env.errors, subnode, "expected {}".format(subpattern))
+                listing.append(sublisting)
+            elif len(subnodes) == 0:
+                bad = True
+                put_error_string(env.errors, node, "append {}".format(subpattern))
             else:
-                put_error_string(errors, node, "unknown import semantics")
-        yield ast.Import(imports, lineno=0, col_offset=0)
+                subnode = subnodes.pop(0)
+                success, result = translate_pattern(env, subnode, subpattern)
+                if not success:
+                    bad = True
+                    put_error_string(env.errors, subnode, "expected {}".format(subpattern))
+                listing.append(result)
+        if bad:
+            return False, None
+        if callable(func):
+            return True,  func(env, *listing)
+        return True, listing
+    elif pattern is symbol:
+        if isinstance(node, dom.Symbol):
+            if callable(func):
+                return True, func(env, node[:])
+            else:
+                return True, node[:]
+    elif isinstance(pattern, string_group):
+        if not (isinstance(node, dom.Literal) and isinstance(node.contents, unicode)):
+            return False, None
+        if pattern.label != node.label and pattern.label is not None:
+            return False, None
+        if callable(func):
+            return True, func(env, node[:])
+        else:
+            return True, node[:]
     else:
-        yield ast.Expr(compile_expression(stmt, errors))
+        assert False, "{} func={}".format(pattern, func)
+    return False, None
+
+symbol = object()
+
+def semantic(name, pattern):
+    def _impl_(func):
+        grammar[name].append((func, pattern))
+        return func
+    return _impl_
+
+@semantic('stmt', group('print', many('expr')))
+def print_statement(env, exprs):
+    return ast.Print(None, exprs, True, lineno=0, col_offset=0)
+
+@semantic('stmt', group('import', many('alias')))
+def import_statement(env, aliases):
+    return ast.Import(aliases, lineno=0, col_offset=0)
+
+@semantic('alias', symbol)
+def symbol_alias(env, name):
+    return ast.alias(name.encode('utf-8'), None)
+
+@semantic('stmt', group('define', symbol, group('', many(symbol)), many('stmt')))
+def def_statement(env, name, arglist, statements):
+    return ast.FunctionDef(
+        name.encode('utf-8'),
+        ast.arguments([a.encode('utf-8') for a in arglist[0]], None, None, []),
+        statements, 
+        [], lineno=0, col_offset=0)
+
+@semantic('stmt', 'expr')
+def expr_as_statement(env, expr):
+    return ast.Expr(expr, lineno=0, col_offset=0)
+
+@semantic('expr', symbol)
+def symbol_expression(env, symbol):
+    if symbol[:1].isdigit():
+        return ast.Num(int(symbol), lineno=0, col_offset=0)
+    else:
+        return ast.Name(symbol.encode('utf-8'), ast.Load(), lineno=0, col_offset=0)
+
+@semantic('expr', string_group(''))
+def string_expression(env, string):
+    return ast.Str(string, lineno=0, col_offset=0)
+
+@semantic('expr', group('attr', 'expr', symbol))
+def attr_expression(env, subj, name):
+    return ast.Attribute(subj, name.encode('utf-8'), ast.Load(), lineno=0, col_offset=0)
+
+@semantic('stmt', group('assign', symbol, 'expr'))
+def assign_expression(env, name, value):
+    target = ast.Name(name.encode('utf-8'), ast.Store(), lineno=0, col_offset=0)
+    return ast.Assign([target], value, lineno=0, col_offset=0)
+
+@semantic('expr', group('', 'expr', many('expr')))
+def call_expression(env, func, argv):
+    return ast.Call(func, argv, [], None, None, lineno=0, col_offset=0)
 
 def put_error_string(errors, node, message):
     if isinstance(node, dom.Literal):
@@ -51,6 +147,16 @@ def put_error_string(errors, node, message):
             dom.Literal("", u"reference", [
                 dom.Literal("", u"", node.ident),
                 dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])]))
+    else:
+        print 'warning: error string with no literal'
+
+class Env(object):
+    def __init__(self):
+        self.errors = [] 
+
+class SemanticErrors(Exception):
+    def __init__(self, document):
+        self.document = document
 
 def evaluate_document(document):
     for item in document.body:
@@ -62,12 +168,16 @@ def evaluate_document(document):
     if language != 'python':
         return
     statements = []
-    errors = []
+    env = Env()
     for item in document.body:
         if item.label == 'language':
             assert item[:] == 'python'
         else:
-            statements.extend(compile_statement(item, errors))
-    if errors:
-        raise SemanticErrors(dom.Document(dom.Literal("", u"", errors)))
+            success, pattern = translate_pattern(env, item, 'stmt')
+            if success:
+                statements.append(pattern)
+            else:
+                put_error_string(env.errors, item, "expected stmt")
+    if env.errors:
+        raise SemanticErrors(dom.Document(dom.Literal("", u"", env.errors)))
     exec compile(ast.Module(statements), "t+", 'exec')
