@@ -39,37 +39,29 @@ class Compositor(object):
         if self.debug:
             self.imglayer.patch9(subj.quad, self.imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
         if isinstance(subj, boxmodel.HBox):
-            x0 = x
             for node in subj.contents:
                 if isinstance(node, boxmodel.Glue):
-                    size = node.with_expand(subj.expand)
-                    node.quad = x0, subj.quad[1], x0+size, subj.quad[3]
-                    x0 += size
+                    node.quad = x+node.offset, subj.quad[1], x+node.offset+node.computed, subj.quad[3]
                     if self.debug:
                         self.imglayer.quad(node.quad, self.imglayer.texcoords(None), (0.0, 1.0, 0.0, 0.2))
                 else:
-                    self.compose(node, x0, y + node.shift)
-                    x0 += node.width
+                    self.compose(node, x+node.offset, y+node.shift)
         elif isinstance(subj, boxmodel.VBox):
-            y0 = y
+            y = y - subj.height
             for node in subj.contents:
                 if isinstance(node, boxmodel.Glue):
-                    size = node.with_expand(subj.expand)
-                    node.quad = subj.quad[0], y0, subj.quad[2], y0+size
-                    y0 += size
+                    node.quad = subj.quad[0], y+node.offset, subj.quad[2], y+node.offset+node.computed
                     if self.debug:
                         self.imglayer.quad(node.quad, self.imglayer.texcoords(None), (1.0, 1.0, 0.0, 0.2))
                 else:
-                    self.compose(node, x + node.shift, y0 + node.height)
-                    y0 += node.vsize
+                    self.compose(node, x + node.shift, y + node.offset)
         elif isinstance(subj, boxmodel.Padding):
             left, top, right, bottom = subj.padding
-            x0 = x + left
             if subj.background is not None or subj.color is not None:
                 self.decor(subj.quad, subj.background, subj.color)
             for node in subj.contents:
                 if isinstance(node, (boxmodel.HBox, boxmodel.VBox)):
-                    self.compose(node, x0, y + node.shift)
+                    self.compose(node, x + node.offset, y + node.shift)
                 else:
                     assert False
         elif isinstance(subj, boxmodel.ImageBox):

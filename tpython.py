@@ -45,12 +45,12 @@ def compile_statement(stmt, errors):
     else:
         yield ast.Expr(compile_expression(stmt, errors))
 
-    def put_error_string(errors, node, message):
-        if isinstance(node, dom.Literal):
-            errors.append(
-                dom.Literal("", u"reference", [
-                    dom.Literal("", u"", node.ident),
-                    dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])]))
+def put_error_string(errors, node, message):
+    if isinstance(node, dom.Literal):
+        errors.append(
+            dom.Literal("", u"reference", [
+                dom.Literal("", u"", node.ident),
+                dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])]))
 
 def evaluate_document(document):
     for item in document.body:

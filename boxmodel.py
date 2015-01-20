@@ -4,6 +4,7 @@ class Frame(object):
     clue = None
     subj = None
     index = -1
+    offset = 0
     def traverse(self):
         yield self
 
@@ -45,16 +46,11 @@ class Glue(Frame):
         self.width = width
         self.shrink = shrink
         self.stretch = stretch
+        self.computed = 0
 
     @property
     def vsize(self):
         return self.width
-
-    def with_expand(self, expand):
-        if expand.real > 0:
-            return self.width + expand.real * self.shrink.real
-        else:
-            return self.width + expand.real * self.stretch.real
 
 class Composite(Box):
     def __init__(self, width, height, depth, contents):
@@ -79,14 +75,15 @@ class Composite(Box):
                 yield node
 
 class VBox(Composite):
-    expand = 0
+    pass
 
 class HBox(Composite):
-    expand = 0
+    pass
 
 class Padding(Composite):
     def __init__(self, box, padding, background=None, color=None):
         left, top, right, bottom = padding
+        box.offset = left
         Composite.__init__(self, box.width + left + right, box.height + top, box.depth + bottom, [box])
         self.padding = padding
         self.background = background
@@ -111,11 +108,15 @@ def hpack(contents, to_dimen=None):
         if isinstance(node, Glue):
             shrink = sum_dimen(shrink, node.shrink)
             stretch = sum_dimen(stretch, node.stretch)
-    box = HBox(width, height, depth, contents)
-    if to_dimen is not None:
-        box.expand = apply_dimen(to_dimen - width, shrink, stretch)
-        box.width = to_dimen
-    return box
+    expand, width = apply_dimen(to_dimen, width, shrink, stretch)
+    x = 0
+    for node in contents:
+        node.offset = x
+        if isinstance(node, Glue):
+            x += set_dimen(node, expand)
+        else:
+            x += node.width
+    return HBox(width, height, depth, contents)
 
 def vpack(contents, to_dimen=None):
     width = 0
@@ -130,11 +131,16 @@ def vpack(contents, to_dimen=None):
         if isinstance(node, Glue):
             shrink = sum_dimen(shrink, node.shrink)
             stretch = sum_dimen(stretch, node.stretch)
-    box = VBox(width, 0, vsize, contents)
-    if to_dimen is not None:
-        box.expand = apply_dimen(to_dimen - vsize, shrink, stretch)
-        box.depth = to_dimen
-    return box
+    expand, vsize = apply_dimen(to_dimen, vsize, shrink, stretch)
+    y = 0
+    for node in contents:
+        if isinstance(node, Glue):
+            node.offset = y
+            y += set_dimen(node, expand)
+        else:
+            node.offset = y + node.height
+            y += node.vsize
+    return VBox(width, 0, vsize, contents)
 
 def sum_dimen(a, b):
     if a.imag == b.imag:
@@ -144,9 +150,19 @@ def sum_dimen(a, b):
     else:
         return a
 
-def apply_dimen(x, shrink, stretch):
+def apply_dimen(to_dimen, size, shrink, stretch):
+    if to_dimen is None:
+        return 0, size
+    x = to_dimen - size
     if x < 0 and shrink.real > 0:
-        return (x / shrink.real) + (shrink.imag * 1j)
-    if x > 0 and stretch.real > 0:
-        return (x / stretch.real) + (stretch.imag * 1j)
-    return x
+        x = (x / shrink.real) + (shrink.imag * 1j)
+    elif x > 0 and stretch.real > 0:
+        x = (x / stretch.real) + (stretch.imag * 1j)
+    return x, to_dimen
+
+def set_dimen(glue, expand):
+    if expand.real > 0:
+        glue.computed = glue.width + expand.real * glue.shrink.real
+    else:
+        glue.computed = glue.width + expand.real * glue.stretch.real
+    return glue.computed
