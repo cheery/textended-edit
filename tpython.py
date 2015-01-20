@@ -93,6 +93,9 @@ def semantic(name, pattern):
         return func
     return _impl_
 
+def as_python_sym(name):
+    return intern(name.encode('utf-8'))
+
 @semantic('stmt', group('print', many('expr')))
 def print_statement(env, exprs):
     return ast.Print(None, exprs, True, lineno=0, col_offset=0)
@@ -103,14 +106,14 @@ def import_statement(env, aliases):
 
 @semantic('alias', symbol)
 def symbol_alias(env, name):
-    return ast.alias(name.encode('utf-8'), None)
+    return ast.alias(as_python_sym(name), None)
 
 @semantic('stmt', group('define', symbol, group('', many(symbol)), many('stmt')))
 def def_statement(env, name, arglist, statements):
     return ast.FunctionDef(
-        name.encode('utf-8'),
+        as_python_sym(name),
         ast.arguments([
-            ast.Name(a.encode('utf-8'), ast.Param(), lineno=0, col_offset=0)
+            ast.Name(as_python_sym(a), ast.Param(), lineno=0, col_offset=0)
             for a in arglist[0]], None, None, []),
         statements, 
         [], lineno=0, col_offset=0)
@@ -124,7 +127,7 @@ def symbol_expression(env, symbol):
     if symbol[:1].isdigit():
         return ast.Num(int(symbol), lineno=0, col_offset=0)
     else:
-        return ast.Name(symbol.encode('utf-8'), ast.Load(), lineno=0, col_offset=0)
+        return ast.Name(as_python_sym(symbol), ast.Load(), lineno=0, col_offset=0)
 
 @semantic('expr', string_group(''))
 def string_expression(env, string):
@@ -132,7 +135,7 @@ def string_expression(env, string):
 
 @semantic('expr', group('attr', 'expr', symbol))
 def attr_expression(env, subj, name):
-    return ast.Attribute(subj, name.encode('utf-8'), ast.Load(), lineno=0, col_offset=0)
+    return ast.Attribute(subj, as_python_sym(name), ast.Load(), lineno=0, col_offset=0)
 
 @semantic('stmt', group('assign', 'expr=', 'expr'))
 def assign_expression(env, target, value):
@@ -144,11 +147,11 @@ def call_expression(env, func, argv):
 
 @semantic('expr=', symbol)
 def symbol_store(env, name):
-    return ast.Name(name.encode('utf-8'), ast.Store(), lineno=0, col_offset=0)
+    return ast.Name(as_python_sym(name), ast.Store(), lineno=0, col_offset=0)
 
 @semantic('expr=', group('attr', 'expr', symbol))
 def attr_expression(env, subj, name):
-    return ast.Attribute(subj, name.encode('utf-8'), ast.Store(), lineno=0, col_offset=0)
+    return ast.Attribute(subj, as_python_sym(name), ast.Store(), lineno=0, col_offset=0)
 
 def put_error_string(errors, node, message):
     if isinstance(node, dom.Literal):
@@ -166,6 +169,8 @@ class Env(object):
 class SemanticErrors(Exception):
     def __init__(self, document):
         self.document = document
+
+local_environ = dict()
 
 def evaluate_document(document):
     for item in document.body:
@@ -189,4 +194,4 @@ def evaluate_document(document):
                 put_error_string(env.errors, item, "expected stmt")
     if env.errors:
         raise SemanticErrors(dom.Document(dom.Literal("", u"", env.errors)))
-    exec compile(ast.Module(statements), "t+", 'exec')
+    exec compile(ast.Module(statements), "t+", 'exec') in local_environ
