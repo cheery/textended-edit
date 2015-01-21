@@ -12,6 +12,7 @@ import layout
 import os
 import ast
 import defaultlayout
+from mapping import Mapping
 from compositor import Compositor
 from OpenGL.GL import *
 from OpenGL.GL import shaders
@@ -38,9 +39,9 @@ class Editor(object):
         self.children = []
         self.ver = 0
         self.mappings = {}
-        self.bridges = []
+        self.mapping = Mapping(self.mappings, defaultlayout.build)
         self.rootbox = None
-        self.build_rootbox = None
+        self.bridges = []
         self.position_hook = lambda editor: None
         self.update_hook = lambda editor: None
         self.close_hook = lambda editor: None
@@ -69,7 +70,6 @@ class Editor(object):
 
     def create_sub_editor(self, document, selection):
         subeditor = Editor(self.images, document, selection)
-        subeditor.build_rootbox = self.build_rootbox
         subeditor.width = self.width
         subeditor.height = self.height
         self.children.append(subeditor)
@@ -79,7 +79,6 @@ class Editor(object):
     def create_layer(self, document):
         print 'layer created'
         layer = EditorLayer(document)
-        layer.build_rootbox = self.build_rootbox
         self.layers.append(layer)
         self.ver = 0
         return layer
@@ -97,6 +96,7 @@ class Bridge(object):
         self.reference = reference
         self.body = body
         self.mappings = {}
+        self.mapping = Mapping(self.mappings, defaultlayout.build)
         self.rootbox = None
 
 module = sys.modules[__name__]
@@ -133,7 +133,6 @@ height = height.value
 images = renderers.ImageResources()
 
 editor = create_editor(images)
-editor.build_rootbox = defaultlayout.build_boxmodel
 focus = editor
 editor.width = width
 editor.height = height
@@ -141,6 +140,45 @@ editor.height = height
 glEnable(GL_BLEND)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 flatlayer = renderers.FlatLayer()
+
+def update_document(t):
+    def layout_editor(editor):
+        editor.mappings.clear()
+        editor.compositor.clear()
+        editor.rootbox = boxmodel.vpack(editor.mapping.update(editor.document.body))
+        editor.inner_width = editor.rootbox.width + 20
+        editor.inner_height = editor.rootbox.vsize + 20
+        editor.position_hook(editor)
+        editor.compositor.clear()
+        editor.compositor.decor((0, 0, editor.width, editor.height), editor.background, editor.color)
+        editor.compositor.compose(editor.rootbox, 10, 10 + editor.rootbox.height)
+        for subeditor in editor.children:
+            layout_editor(subeditor)
+    if editor.document.ver != editor.ver:
+        layout_editor(editor)
+        editor.ver = editor.document.ver
+        update_bridges()
+
+def update_bridges():
+    editor.bridges = []
+    for layer in editor.layers:
+        editor.bridges.extend(collect_bridges(layer))
+    sectors = []
+    for bridge in editor.bridges:
+        referenced = editor.document.nodes.get(bridge.reference)
+        if referenced not in editor.mappings:
+            continue
+        bridge.rootbox = boxmodel.vpack(bridge.mapping.update(bridge.body))
+        x0, y0, x1, y1 = editor.mappings[referenced].tokens[0].quad
+        editor.compositor.decor((x0,y0,x1,y1), boxmodel.Patch9("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
+        bridge.y = y0
+        sectors.append(bridge)
+    sectors.sort(key=lambda b: b.y)
+    max_y = 0
+    for bridge in sectors:
+        y = max(bridge.y, max_y)
+        editor.compositor.compose(bridge.rootbox, editor.rootbox.width + 50, y)
+        max_y = y + bridge.rootbox.vsize
 
 def update_characters(t):
     def layout_editor(editor):
@@ -198,9 +236,6 @@ def update_cursor(t):
     flatlayer.clear()
     x, y = cursor
 
-    if focus.rootbox is None:
-        return
-    
     document = focus.document
     cursors = defaultdict(list)
     subj = focus.selection.subj
@@ -328,7 +363,7 @@ def paint(t):
     glClearColor(0x27/255.0, 0x28/255.0, 0x22/255.0, 1)
     glClear(GL_COLOR_BUFFER_BIT)
 
-    update_characters(t)
+    update_document(t)
     update_cursor(t)
 
     scale = 1.0
