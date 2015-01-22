@@ -1,3 +1,5 @@
+import treepython
+import extensions
 import gate
 import sys
 import traceback
@@ -152,10 +154,56 @@ def update_document(t):
         editor.compositor.compose(editor.rootbox, 10, 10 + editor.rootbox.height)
         for subeditor in editor.children:
             layout_editor(subeditor)
-    if editor.document.ver != editor.ver:
+    must_update = configure_mapping(editor.mapping, editor.document.body)
+    if editor.document.ver != editor.ver or must_update:
         layout_editor(editor)
         editor.ver = editor.document.ver
         update_bridges()
+
+
+extensions_table = {}
+
+def configure_mapping(mapping, body):
+    for directive in body:
+        if directive.type == 'string' and directive.label == 'language':
+            name = directive[:]
+            return get_extension_layout(mapping.func, name)
+    return False
+
+class Extension(object):
+    def __init__(self, path, module):
+        self.path = path
+        self.module = module
+
+    def exception_catch_build(self, mapping, *args):
+        try:
+            return iter(self.module.layout(mapping, *args))
+        except Exception as error:
+            traceback.print_exc()
+            mapping.func = defaultlayout.build
+
+def get_extension_layout(mapping, name):
+    if name in extensions_table:
+        ext = extensions_table[name]
+        if ext.last_check + 1.0 < time.time():
+            ext.last_check = time.time()
+            mtime = os.path.getmtime(ext.path)
+            if ext.mtime <= mtime:
+                return False 
+        else:
+            return False
+    path = "extensions/" + name + "/__init__.t+"
+    if not os.path.exists(path):
+        mapping.func = defaultlayout.build
+        return False
+    module = treepython.import_file_to_module("extensions." + name, path)
+    ext = Extension(path, module)
+    ext.last_check = time.time()
+    ext.mtime = os.path.getmtime(ext.path)
+    extensions_table[name] = ext
+    print "loaded language module", name
+    mapping.func = ext.exception_catch_build
+    return True
 
 def update_bridges():
     editor.bridges = []

@@ -173,8 +173,12 @@ class Env(object):
         self.errors = [] 
 
 class SemanticErrors(Exception):
-    def __init__(self, document):
+    def __init__(self, document, filename):
         self.document = document
+        self.filename = filename
+
+    def __str__(self):
+        return "{}".format(self.filename)
 
 local_environ = dict()
 
@@ -184,7 +188,7 @@ def evaluate_document(document):
         exec compile(ast, "t+", 'exec') in local_environ
 
 def file_as_ast(path):
-    document = dom.Document(dom.Literal("", u"", dom.load(path)))
+    document = dom.Document(dom.Literal("", u"", dom.load(path)), path)
     return document_as_ast(document)
 
 def document_as_ast(document):
@@ -208,7 +212,7 @@ def document_as_ast(document):
             else:
                 put_error_string(env.errors, item, "expected stmt")
     if env.errors:
-        raise SemanticErrors(dom.Document(dom.Literal("", u"", env.errors)))
+        raise SemanticErrors(dom.Document(dom.Literal("", u"", env.errors)), document.filename)
     return ast.Module(statements)
 
 def import_file_to_module(module_name, path):
