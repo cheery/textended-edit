@@ -126,10 +126,10 @@ def slit(sel):
     pos = parent.index(sel.subj)
     if sel.head != sel.tail:
         sel.drop()
-    if sel.head == 0:
+    elif sel.head == 0:
         sel.subj = parent
         sel.head = sel.tail = pos
-    if sel.head == len(sel.subj):
+    elif sel.head == len(sel.subj):
         sel.subj = parent
         sel.head = sel.tail = pos + 1
     else:
@@ -154,7 +154,7 @@ def fall_before(sel):
     pos = parent.index(sel.subj)
     sel.subj = parent
     sel.head = sel.tail = pos
-    if type != 'list':
+    if type == 'symbol':
         fall_before(sel)
 
 @insert.text(')')
@@ -169,7 +169,7 @@ def fall_after(sel):
     pos = parent.index(sel.subj) + 1
     sel.subj = parent
     sel.head = sel.tail = pos
-    if type != 'list':
+    if type == 'symbol':
         fall_after(sel)
 
 @insert.key('left')
