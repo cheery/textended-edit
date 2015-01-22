@@ -45,7 +45,6 @@ class Editor(object):
         self.position_hook = lambda editor: None
         self.update_hook = lambda editor: None
         self.close_hook = lambda editor: None
-        self.filename = None
         self.copybuf = None
         self.scroll_x = 0
         self.scroll_y = 0
@@ -86,7 +85,6 @@ class Editor(object):
 class EditorLayer(object):
     def __init__(self, document):
         self.document = document
-        self.filename = None
         self.ver = 0
         self.build_rootbox = None
 
@@ -102,18 +100,18 @@ class Bridge(object):
 module = sys.modules[__name__]
 
 def create_editor(images):
-    contents = []
-    for path in sys.argv[1:]:
-        if os.path.exists(path):
-            contents.extend(dom.load(path))
-    body = dom.Literal("", u"", contents)
-
-    document = dom.Document(body)
-    if len(sys.argv) == 2:
-        document.filename = sys.argv[1]
-
+    if len(sys.argv) > 1:
+        filename = sys.argv[1]
+        body = dom.Literal("", u"", dom.load(filename))
+        document = dom.Document(body, filename)
+    else:
+        body = dom.Literal("", u"", [])
+        document = dom.Document(body, None)
     selection = Selection.bottom(body)
     editor = Editor(images, document, selection)
+    for path in sys.argv[2:]:
+        overlay_document = dom.Document(dom.Literal("", u"", dom.load(path)))
+        editor.create_layer(overlay_document)
     return editor
 
 SDL_Init(SDL_INIT_VIDEO)

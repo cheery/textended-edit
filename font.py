@@ -56,7 +56,7 @@ class Font(object):
                 x3 = (char['xadvance']) * scale * 0.5
                 result.append(Glue(x3, ws_shrink, ws_stretch).set_subj(text, index))
             elif kern[1] not in self.characters:
-                result.append(self.repr_character(kern[1], padding, color).set_subj(text, index))
+                result.append(self.repr_character(kern[1], scale, padding, color).set_subj(text, index))
             else:
                 char = self.characters[kern[1]]
                 b = (self.base - char['yoffset']) * scale
@@ -72,9 +72,9 @@ class Font(object):
         result.append(Glue(0).set_subj(text, index))
         return result
 
-    def repr_character(self, chnum, padding, color):
+    def repr_character(self, chnum, scale, padding, color):
         result = []
-        for ch in '\\x' + format(kern[1], '02x'):
+        for ch in '\\x' + format(chnum, '02x'):
             char = self.characters[ord(ch)]
             b = (self.base - char['yoffset']) * scale
             w = char['width'] * scale * 0.5
@@ -83,6 +83,6 @@ class Font(object):
             x2 = x1 + w
             x3 = (char['xadvance']) * scale * 0.5
             result.append(Glue(x1))
-            result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding, color).set_subj(text, index))
+            result.append(LetterBox(w, b, h-b, self, char['texcoords'], padding, color))
             result.append(Glue(x3 - x2))
         return hpack(result)

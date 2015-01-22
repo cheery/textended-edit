@@ -3,9 +3,10 @@ import tempfile, os
 from random import randint
 
 class Document(object):
-    def __init__(self, body):
+    def __init__(self, body, filename=None):
         self.body = body
         self.nodes = {}
+        self.filename = filename
         self.ver = 1
         node_insert(self, body)
 
@@ -165,6 +166,9 @@ def load(path):
     with open(path, 'rb') as fd:
         contents = textended.load(fd, transform_dec)
     return contents
+
+def dump(fd, document):
+    textended.dump(document.body, fd, transform_enc)
 
 def save(path, contents):
     fd = tempfile.NamedTemporaryFile(

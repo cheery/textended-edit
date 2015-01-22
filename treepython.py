@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import dom, sys, os, ast
+import dom, sys, os, ast, imp
 from collections import defaultdict
 
 grammar = defaultdict(list)
@@ -155,10 +155,16 @@ def attr_expression(env, subj, name):
 
 def put_error_string(errors, node, message):
     if isinstance(node, dom.Literal):
-        errors.append(
-            dom.Literal("", u"reference", [
+        if node.document.filename is not None:
+            error = dom.Literal("", u"reference", [
                 dom.Literal("", u"", node.ident),
-                dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])]))
+                dom.Literal("", u"", unicode(node.document.filename)),
+                dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])])
+        else:
+            error = dom.Literal("", u"reference", [
+                dom.Literal("", u"", node.ident),
+                dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])])
+        errors.append(error)
     else:
         print 'warning: error string with no literal'
 
@@ -264,10 +270,17 @@ class MetaImporter(object):
 sys.meta_path.insert(0, MetaImporter())
 
 if __name__=='__main__':
-    sys.argv.pop(0)
-    if len(sys.argv) > 0:
-        import_file_to_module("__main__", sys.argv[0])
-        sys.exit(0)
-    else:
-        sys.stderr.write("usage: treepython.py FILE\n")
+    try:
+        sys.argv.pop(0)
+        if len(sys.argv) > 0:
+            import_file_to_module("__main__", sys.argv[0])
+            sys.exit(0)
+        else:
+            sys.stderr.write("usage: treepython.py FILE\n")
+            sys.exit(1)
+    except SemanticErrors as ser:
+        if not sys.stderr.isatty():
+            dom.dump(sys.stderr, ser.document)
+        else:
+            print "semantic errors, route stderr to file"
         sys.exit(1)
