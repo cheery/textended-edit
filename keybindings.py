@@ -1,6 +1,7 @@
 import dom
-import tpython
+import treepython
 import boxmodel
+import sys
 
 class KeyEvent(object):
     def __init__(self, mode, editor, key, mods, text):
@@ -218,6 +219,10 @@ def fall_right_leaf(node):
     else:
         return fall_right_leaf(node.parent)
 
+@insert.key('q', 'ctrl')
+def save_document(event):
+    sys.exit(0)
+
 @insert.key('s', 'ctrl')
 def save_document(event):
     document = event.editor.document
@@ -252,8 +257,8 @@ def paste_document(event):
 @insert.key('f5')
 def evaluate_document(event):
     try:
-        tpython.evaluate_document(event.editor.document)
-    except tpython.SemanticErrors as ser:
+        treepython.evaluate_document(event.editor.document)
+    except treepython.SemanticErrors as ser:
         event.editor.create_layer(ser.document)
 
 @insert.key('up')

@@ -1,5 +1,5 @@
-import dom
-import ast
+#!/usr/bin/env python
+import dom, sys, os, ast
 from collections import defaultdict
 
 grammar = defaultdict(list)
@@ -173,6 +173,15 @@ class SemanticErrors(Exception):
 local_environ = dict()
 
 def evaluate_document(document):
+    ast = document_as_ast(document)
+    if ast:
+        exec compile(ast, "t+", 'exec') in local_environ
+
+def file_as_ast(path):
+    document = dom.Document(dom.Literal("", u"", dom.load(path)))
+    return document_as_ast(document)
+
+def document_as_ast(document):
     for item in document.body:
         if item.label == 'language':
             language = item[:]
@@ -194,4 +203,71 @@ def evaluate_document(document):
                 put_error_string(env.errors, item, "expected stmt")
     if env.errors:
         raise SemanticErrors(dom.Document(dom.Literal("", u"", env.errors)))
-    exec compile(ast.Module(statements), "t+", 'exec') in local_environ
+    return ast.Module(statements)
+
+def import_file_to_module(module_name, path):
+    try:
+        ast = file_as_ast(path)
+        mod = imp.new_module(module_name)
+        mod.__file__ = path
+        eval(ast_compile(ast, path, "exec"), mod.__dict__)
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
+    return mod
+
+def ast_compile(ast, filename, mode):
+    return compile(ast, filename, mode)
+
+class MetaLoader(object):
+    def __init__(self, path, ispkg):
+        self.path = path
+        self.ispkg = ispkg
+
+    def load_module(self, fullname):
+        if fullname in sys.modules:
+            return sys.modules[fullname]
+
+        sys.modules[fullname] = None
+        mod = import_file_to_module(fullname, self.path)
+
+        mod.__file__ = self.path
+        mod.__loader__ = self
+        mod.__name__ = fullname
+
+        if self.ispkg:
+            mod.__path__ = []
+            mod.__package__ = fullname
+        else:
+            mod.__package__ = fullname.rpartition('.')[0]
+
+        sys.modules[fullname] = mod
+        return mod
+
+class MetaImporter(object):
+    def find_on_path(self, fullname):
+        files = [("{}/{}/__init__.t+", True), ("{}/{}.t+", False)]
+        dirpath = "/".join(fullname.split("."))
+        for path in sys.path:
+            path = os.path.abspath(path)
+            for fp, ispkg in files:
+                fullpath = fp.format(path, dirpath)
+                if os.path.exists(fullpath):
+                    return fullpath, ispkg
+        return None, None
+
+    def find_module(self, fullname, path=None):
+        path, ispkg = self.find_on_path(fullname)
+        if path:
+            return MetaLoader(path, ispkg)
+
+sys.meta_path.insert(0, MetaImporter())
+
+if __name__=='__main__':
+    sys.argv.pop(0)
+    if len(sys.argv) > 0:
+        import_file_to_module("__main__", sys.argv[0])
+        sys.exit(0)
+    else:
+        sys.stderr.write("usage: treepython.py FILE\n")
+        sys.exit(1)
