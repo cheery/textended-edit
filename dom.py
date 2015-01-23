@@ -62,6 +62,9 @@ class Literal(Node):
             self.type = 'binary'
         elif isinstance(contents, unicode):
             self.type = 'string'
+    
+    def __repr__(self):
+        return "Literal({0.ident!r}, {0.label!r}, {0.type})".format(self)
 
     @property
     def label(self):

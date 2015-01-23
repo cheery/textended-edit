@@ -14,6 +14,7 @@ import layout
 import os
 import ast
 import defaultlayout
+import imp
 from mapping import Mapping
 from compositor import Compositor
 from OpenGL.GL import *
@@ -167,7 +168,7 @@ def configure_mapping(mapping, body):
     for directive in body:
         if directive.type == 'string' and directive.label == 'language':
             name = directive[:]
-            return get_extension_layout(mapping.func, name)
+            return get_extension_layout(mapping, name)
     return False
 
 class Extension(object):
@@ -181,6 +182,7 @@ class Extension(object):
         except Exception as error:
             traceback.print_exc()
             mapping.func = defaultlayout.build
+            return defaultlayout.build(mapping, *args)
 
 def get_extension_layout(mapping, name):
     if name in extensions_table:
@@ -188,15 +190,21 @@ def get_extension_layout(mapping, name):
         if ext.last_check + 1.0 < time.time():
             ext.last_check = time.time()
             mtime = os.path.getmtime(ext.path)
-            if ext.mtime <= mtime:
+            if ext.mtime >= mtime:
                 return False 
         else:
             return False
     path = "extensions/" + name + "/__init__.t+"
-    if not os.path.exists(path):
+    py_path = "extensions/" + name + "/__init__.py"
+    modname = "extensions." + name
+    if os.path.exists(path):
+        module = treepython.import_file_to_module("extensions." + name, path)
+    elif os.path.exists(py_path):
+        module = imp.load_source(modname, py_path)
+        path = py_path
+    else:
         mapping.func = defaultlayout.build
         return False
-    module = treepython.import_file_to_module("extensions." + name, path)
     ext = Extension(path, module)
     ext.last_check = time.time()
     ext.mtime = os.path.getmtime(ext.path)

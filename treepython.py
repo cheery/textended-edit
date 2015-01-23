@@ -1,114 +1,73 @@
 #!/usr/bin/env python
 import dom, sys, os, ast, imp
 from collections import defaultdict
+import recognizer
+from recognizer import Group, String, Symbol
+from recognizer import Context
 
 grammar = defaultdict(list)
 
-class group(object):
-    def __init__(self, label, *patterns):
-        self.label = label
-        self.patterns = patterns
+alias = Context('alias')
+stmt = Context('stmt')
+expr = Context('expr')
+expr_set = Context('expr=')
 
-class many(object):
-    def __init__(self, pattern):
+def translate_pattern(env, node, pattern):#, func=None):
+    result = pattern.scan(grammar, node)
+    if result is None:
+        raise TranslationError(node, pattern)
+    match, context = result
+    if isinstance(match, recognizer.Group):
+        gen = iter(node)
+        out = [translate_pattern(env, gen.next(), pat) for pat in match.args]
+        if match.varg:
+            out.append([translate_pattern(env, rem, match.varg) for rem in gen])
+        if callable(match.post):
+            out = match.post(env, *out)
+    else:
+        out = node[:]
+        if callable(match.post):
+            out = match.post(env, out)
+    for c in context:
+        if callable(c.post):
+            out = c.post(env, out)
+    return out
+
+class TranslationError(Exception):
+    def __init__(self, node, pattern):
+        self.node = node
         self.pattern = pattern
 
-class string_group(object):
-    def __init__(self, label=None):
-        self.label = label
+    def __str__(self):
+        return "{} does not translate to {}".format(self.node, self.pattern)
 
-def translate_pattern(env, node, pattern, func=None):
-    if isinstance(pattern, str):
-        results = []
-        for subfunc, subpattern in grammar[pattern]:
-            success, result = translate_pattern(env, node, subpattern, subfunc)
-            if success:
-                results.append(result)
-        if len(results) == 0:
-            return False, None
-        if len(results) > 1:
-            put_error_string(env.errors, node, "ambiguous as {}".format(pattern))
-            return False, None
-        if callable(func):
-            return True, func(env, *results)
-        return True, results[0]
-    elif isinstance(pattern, group):
-        if not (isinstance(node, dom.Literal) and isinstance(node.contents, list)):
-            return False, None
-        if pattern.label != node.label:
-            return False, None
-        subnodes = list(node[:])
-        listing = []
-        bad = False
-        for subpattern in pattern.patterns:
-            if isinstance(subpattern, many):
-                sublisting = []
-                while len(subnodes) > 0:
-                    subnode = subnodes.pop(0)
-                    success, result = translate_pattern(env, subnode, subpattern.pattern)
-                    sublisting.append(result)
-                    if not success:
-                        bad = True
-                        put_error_string(env.errors, subnode, "expected {}".format(subpattern))
-                listing.append(sublisting)
-            elif len(subnodes) == 0:
-                bad = True
-                put_error_string(env.errors, node, "append {}".format(subpattern))
-            else:
-                subnode = subnodes.pop(0)
-                success, result = translate_pattern(env, subnode, subpattern)
-                if not success:
-                    bad = True
-                    put_error_string(env.errors, subnode, "expected {}".format(subpattern))
-                listing.append(result)
-        if bad:
-            return False, None
-        if callable(func):
-            return True,  func(env, *listing)
-        return True, listing
-    elif pattern is symbol:
-        if isinstance(node, dom.Symbol):
-            if callable(func):
-                return True, func(env, node[:])
-            else:
-                return True, node[:]
-    elif isinstance(pattern, string_group):
-        if not (isinstance(node, dom.Literal) and isinstance(node.contents, unicode)):
-            return False, None
-        if pattern.label != node.label and pattern.label is not None:
-            return False, None
-        if callable(func):
-            return True, func(env, node[:])
-        else:
-            return True, node[:]
-    else:
-        assert False, "{} func={}".format(pattern, func)
-    return False, None
-
-symbol = object()
-
-def semantic(name, pattern):
+def semantic(ctx, pattern):
     def _impl_(func):
-        grammar[name].append((func, pattern))
+        pattern.post = func
+        grammar[ctx.name].append(pattern)
         return func
     return _impl_
 
 def as_python_sym(name):
     return intern(name.encode('utf-8'))
 
-@semantic('stmt', group('print', many('expr')))
+@semantic(stmt, Group('return', [expr]))
+def return_statement(env, expr):
+    return ast.Return(expr, lineno=0, col_offset=0)
+
+@semantic(stmt, Group('print', [], expr))
 def print_statement(env, exprs):
     return ast.Print(None, exprs, True, lineno=0, col_offset=0)
 
-@semantic('stmt', group('import', many('alias')))
+@semantic(stmt, Group('import', [], alias))
 def import_statement(env, aliases):
     return ast.Import(aliases, lineno=0, col_offset=0)
 
-@semantic('alias', symbol)
+@semantic(alias, Symbol())
 def symbol_alias(env, name):
     return ast.alias(as_python_sym(name), None)
 
-@semantic('stmt', group('define', symbol, group('', many(symbol)), many('stmt')))
+@semantic(stmt, Group('define', [Symbol(), Group('', [], Symbol())],stmt))
 def def_statement(env, name, arglist, statements):
     return ast.FunctionDef(
         as_python_sym(name),
@@ -118,38 +77,38 @@ def def_statement(env, name, arglist, statements):
         statements, 
         [], lineno=0, col_offset=0)
 
-@semantic('stmt', 'expr')
+@semantic(stmt, Context('expr'))
 def expr_as_statement(env, expr):
     return ast.Expr(expr, lineno=0, col_offset=0)
 
-@semantic('expr', symbol)
+@semantic(expr, Symbol())
 def symbol_expression(env, symbol):
     if symbol[:1].isdigit():
         return ast.Num(int(symbol), lineno=0, col_offset=0)
     else:
         return ast.Name(as_python_sym(symbol), ast.Load(), lineno=0, col_offset=0)
 
-@semantic('expr', string_group(''))
+@semantic(expr, String(''))
 def string_expression(env, string):
     return ast.Str(string, lineno=0, col_offset=0)
 
-@semantic('expr', group('attr', 'expr', symbol))
+@semantic(expr, Group('attr', [expr, Symbol()]))
 def attr_expression(env, subj, name):
     return ast.Attribute(subj, as_python_sym(name), ast.Load(), lineno=0, col_offset=0)
 
-@semantic('stmt', group('assign', 'expr=', 'expr'))
+@semantic(stmt, Group('assign', [expr_set, expr]))
 def assign_expression(env, target, value):
     return ast.Assign([target], value, lineno=0, col_offset=0)
 
-@semantic('expr', group('', 'expr', many('expr')))
+@semantic(expr, Group('', [expr],expr))
 def call_expression(env, func, argv):
     return ast.Call(func, argv, [], None, None, lineno=0, col_offset=0)
 
-@semantic('expr=', symbol)
+@semantic(expr_set, Symbol())
 def symbol_store(env, name):
     return ast.Name(as_python_sym(name), ast.Store(), lineno=0, col_offset=0)
 
-@semantic('expr=', group('attr', 'expr', symbol))
+@semantic(expr_set, Group('attr', [expr, Symbol()]))
 def attr_expression(env, subj, name):
     return ast.Attribute(subj, as_python_sym(name), ast.Store(), lineno=0, col_offset=0)
 
@@ -206,11 +165,8 @@ def document_as_ast(document):
         if item.label == 'language':
             assert item[:] == 'python'
         else:
-            success, pattern = translate_pattern(env, item, 'stmt')
-            if success:
-                statements.append(pattern)
-            else:
-                put_error_string(env.errors, item, "expected stmt")
+            pattern = translate_pattern(env, item,stmt)
+            statements.append(pattern)
     if env.errors:
         raise SemanticErrors(dom.Document(dom.Literal("", u"", env.errors)), document.filename)
     return ast.Module(statements)
