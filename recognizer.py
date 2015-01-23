@@ -18,7 +18,6 @@ class Symbol(Pattern):
 
     def __repr__(self):
         return "Symbol()"
-symbol = Symbol()
 
 class Binary(Pattern):
     def __init__(self, label):

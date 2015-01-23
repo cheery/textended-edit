@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 import dom, sys, os, ast, imp
 from collections import defaultdict
-import recognizer
-from recognizer import Group, String, Symbol
-from recognizer import Context
+from recognizer import Group, String, Symbol, Context
 
 grammar = defaultdict(list)
 
