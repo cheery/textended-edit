@@ -14,3 +14,10 @@ Related blog posts:
  * http://boxbase.org/entries/2015/jan/19/textended-layout-engine/
 
 There's an IRC channel #essence in irc.freenode.net, for those who like to discuss about visual programming/structured editing.
+
+## Screenshots
+
+![python mode off](screeshots/python-mode-off.png)
+![python mode on](screeshots/python-mode-on.png)
+
+Compiler and layouter are using similar matching rules. The rules in `extensions/python/__init__.py` were initially copied from `treepython.py`.
