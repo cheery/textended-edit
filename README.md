@@ -17,7 +17,7 @@ There's an IRC channel #essence in irc.freenode.net, for those who like to discu
 
 ## Screenshots
 
-Here's the same structure, first with default layouting...
+Here's a screenshot from `samples/clearscreen.t+`, first with default layouting...
 
 ![python mode off](screenshots/python-mode-off.png)
 
