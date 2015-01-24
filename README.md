@@ -17,7 +17,12 @@ There's an IRC channel #essence in irc.freenode.net, for those who like to discu
 
 ## Screenshots
 
+Here's the same structure, first with default layouting...
+
 ![python mode off](screenshots/python-mode-off.png)
+
+Next with python layouting...
+
 ![python mode on](screenshots/python-mode-on.png)
 
 Compiler and layouter are using similar matching rules. The rules in `extensions/python/__init__.py` were initially copied from `treepython.py`.
