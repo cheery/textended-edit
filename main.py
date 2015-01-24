@@ -42,7 +42,8 @@ class Editor(object):
         self.children = []
         self.ver = 0
         self.mappings = {}
-        self.mapping = Mapping(self.mappings, defaultlayout.build)
+        self.mapping = Mapping(self.mappings, self.document.body, None)
+        self.build_layout = defaultlayout.build
         self.rootbox = None
         self.bridges = []
         self.position_hook = lambda editor: None
@@ -97,7 +98,8 @@ class Bridge(object):
         self.reference = reference
         self.body = body
         self.mappings = {}
-        self.mapping = Mapping(self.mappings, defaultlayout.build)
+        self.mapping = Mapping(self.mappings, body, None)
+        self.build_layout = defaultlayout.build
         self.rootbox = None
 
 module = sys.modules[__name__]
@@ -146,7 +148,7 @@ def update_document(t):
     def layout_editor(editor):
         editor.mappings.clear()
         editor.compositor.clear()
-        editor.rootbox = boxmodel.vpack(editor.mapping.update(editor.document.body))
+        editor.rootbox = boxmodel.vpack(editor.mapping.update(editor.build_layout))
         editor.inner_width = editor.rootbox.width + 20
         editor.inner_height = editor.rootbox.vsize + 20
         editor.position_hook(editor)
@@ -155,7 +157,7 @@ def update_document(t):
         editor.compositor.compose(editor.rootbox, 10, 10 + editor.rootbox.height)
         for subeditor in editor.children:
             layout_editor(subeditor)
-    must_update = configure_mapping(editor.mapping, editor.document.body)
+    must_update = configure_mapping(editor, editor.mapping, editor.document.body)
     if editor.document.ver != editor.ver or must_update:
         layout_editor(editor)
         editor.ver = editor.document.ver
@@ -164,11 +166,11 @@ def update_document(t):
 
 extensions_table = {}
 
-def configure_mapping(mapping, body):
+def configure_mapping(editor, mapping, body):
     for directive in body:
         if directive.type == 'string' and directive.label == 'language':
             name = directive[:]
-            return get_extension_layout(mapping, name)
+            return get_extension_layout(editor, mapping, name)
     return False
 
 class Extension(object):
@@ -184,7 +186,7 @@ class Extension(object):
             mapping.func = defaultlayout.build
             return defaultlayout.build(mapping, *args)
 
-def get_extension_layout(mapping, name):
+def get_extension_layout(editor, mapping, name):
     if name in extensions_table:
         ext = extensions_table[name]
         if ext.last_check + 1.0 < time.time():
@@ -203,14 +205,14 @@ def get_extension_layout(mapping, name):
         module = imp.load_source(modname, py_path)
         path = py_path
     else:
-        mapping.func = defaultlayout.build
+        editor.build_layout = defaultlayout.build
         return False
     ext = Extension(path, module)
     ext.last_check = time.time()
     ext.mtime = os.path.getmtime(ext.path)
     extensions_table[name] = ext
     print "loaded language module", name
-    mapping.func = ext.exception_catch_build
+    editor.build_layout = ext.exception_catch_build
     return True
 
 def update_bridges():

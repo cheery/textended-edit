@@ -1,10 +1,11 @@
 import boxmodel
 
 class Mapping(object):
-    __slots__ = ['mappings', 'func', 'subj', 'tokens', 'index']
-    def __init__(self, mappings, func):
+    __slots__ = ['mappings', 'subj', 'tokens', 'index']
+    def __init__(self, mappings, subj, index):
         self.mappings = mappings
-        self.func = func
+        self.subj = subj
+        self.index = index
         self.tokens = ()
 
     def __len__(self):
@@ -12,12 +13,9 @@ class Mapping(object):
 
     def __getitem__(self, index):
         assert self.subj.type == 'list'
-        submapping = Mapping(self.mappings, self.func)
-        return submapping.update(self.subj[index], index)
+        return Mapping(self.mappings, self.subj[index], index)
 
-    def update(self, subj, index=None):
-        self.mappings[subj] = self
-        self.subj = subj
-        self.index = index
-        self.tokens = list(self.func(self))
+    def update(self, func, *args):
+        self.mappings[self.subj] = self
+        self.tokens = list(func(self, *args))
         return self.tokens

@@ -57,6 +57,7 @@ class Composite(Box):
         Box.__init__(self, width, height, depth)
         self.contents = contents
         for node in contents:
+            assert isinstance(node, Frame)
             node.parent = self
 
     def index(self, obj):

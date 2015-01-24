@@ -35,10 +35,10 @@ def build(mapping):
         return [boxmodel.hpack(prefix + sans(node, fontsize, color=green) + postfix)]
     elif mapping.index is None:
         tokens = []
-        for i, subtokens in enumerate(mapping):
-            if i > 0:
+        for submapping in mapping:
+            if submapping.index > 0:
                 tokens.append(boxmodel.Glue(4))
-            tokens.extend(subtokens)
+            tokens.extend(submapping.update(build))
         return tokens
     else:
         tokens = []
@@ -46,10 +46,10 @@ def build(mapping):
         if len(node.label) > 0:
             tokens.append(boxmodel.hpack(sans(node.label, fontsize, color=blue)))
             space = True
-        for subtokens in mapping:
+        for submapping in mapping:
             if space:
                 tokens.extend(sans(' ', fontsize, color=white))
-            tokens.extend(subtokens)
+            tokens.extend(submapping.update(build))
             space = True
         return [lazy_lisp_break(tokens, 300)]
 
