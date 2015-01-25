@@ -1,3 +1,4 @@
 ‰t+
 
-Á0languagepythonÃŸimportÀÖ__main__ÃåimportÀÌ	OpenGL.GLÃÍdefineÀpaintƒ%À/tƒGÃšattrÃ‚attrÀd OpenGLÀòGLÀÕglClearColorÀ¡0.0Àf0.0ÀH0.0À1.0ƒ×Ã(attrÃ±attrÀõOpenGLÀdGLÀ¼glClearÃvattrÃmattrÀOpenGLÀçGLÀ`GL_COLOR_BUFFER_BITÃz~assignÃKattrÀÌG__main__ÀópaintÀkpaintÿ§_ª^
+Á0languagepythonÃŸimportÀ__main__ÃåimportÀÌ	OpenGL.GLÃÍdefineÀpaintƒ%À/tƒGÃšattrÃ‚attrÀd OpenGLÀòGLÀÕglClearColorÃèvarargÁj
+float-rgba926a12ƒ×Ã(attrÃ±attrÀõOpenGLÀdGLÀ¼glClearÃvattrÃmattrÀOpenGLÀçGLÀ`GL_COLOR_BUFFER_BITÃz~assignÃKattrÀÌG__main__ÀópaintÀkpaintÿðÒ§

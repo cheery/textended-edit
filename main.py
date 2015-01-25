@@ -224,7 +224,7 @@ def update_bridges():
         referenced = editor.document.nodes.get(bridge.reference)
         if referenced not in editor.mappings:
             continue
-        bridge.rootbox = boxmodel.vpack(bridge.mapping.update(bridge.body))
+        bridge.rootbox = boxmodel.vpack(bridge.mapping.update(bridge.build_layout))
         x0, y0, x1, y1 = editor.mappings[referenced].tokens[0].quad
         editor.compositor.decor((x0,y0,x1,y1), boxmodel.Patch9("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
         bridge.y = y0

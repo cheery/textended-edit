@@ -8,6 +8,7 @@ grammar = defaultdict(list)
 alias = Context('alias')
 stmt = Context('stmt')
 expr = Context('expr')
+argument = Context('argument')
 expr_set = Context('expr=')
 
 def translate_pattern(env, node, pattern):#, func=None):
@@ -35,6 +36,10 @@ class TranslationError(Exception):
     def __init__(self, node, pattern):
         self.node = node
         self.pattern = pattern
+
+    @property
+    def string(self):
+        return "does not translate to {}".format(self.pattern)
 
     def __str__(self):
         return "{} does not translate to {}".format(self.node, self.pattern)
@@ -100,9 +105,39 @@ def attr_expression(env, subj, name):
 def assign_expression(env, target, value):
     return ast.Assign([target], value, lineno=0, col_offset=0)
 
-@semantic(expr, Group('', [expr],expr))
+@semantic(argument, Context('expr'))
+def expr_as_argument(env, expr):
+    return ('arg', expr)
+
+@semantic(argument, Group('vararg', [expr]))
+def varg_argument(env, expr):
+    return ('vararg', expr)
+
+@semantic(expr, Group('', [expr], argument))
 def call_expression(env, func, argv):
-    return ast.Call(func, argv, [], None, None, lineno=0, col_offset=0)
+    args = []
+    varg = None
+    for style, expr in argv:
+        if style == 'arg':
+            args.append(expr)
+        elif style == 'vararg':
+            varg = expr
+        else:
+            assert False, "should not happen"
+    return ast.Call(func, args, [], varg, None, lineno=0, col_offset=0)
+
+@semantic(expr, String("float-rgba"))
+def float_rgba_expression(env, hexdec):
+    channels = [c / 255.0 for c in hex_to_rgb(hexdec)] + [1.0]
+    return ast.Tuple(
+        [ast.Num(x, lineno=0, col_offset=0) for x in channels[:4]],
+        ast.Load(),
+        lineno=0, col_offset=0)
+
+def hex_to_rgb(value):
+    lv = len(value)
+    return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
+
 
 @semantic(expr_set, Symbol())
 def symbol_store(env, name):
@@ -162,8 +197,11 @@ def document_as_ast(document):
         if item.label == 'language':
             assert item[:] == 'python'
         else:
-            pattern = translate_pattern(env, item,stmt)
-            statements.append(pattern)
+            try:
+                pattern = translate_pattern(env, item, stmt)
+                statements.append(pattern)
+            except TranslationError as error:
+                put_error_string(env.errors, error.node, error.string)
     if env.errors:
         raise SemanticErrors(dom.Document(dom.Literal("", u"", env.errors)), document.filename)
     return ast.Module(statements)

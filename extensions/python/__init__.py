@@ -88,6 +88,29 @@ def layout_def(name, arglist, body):
         hpack(tokens),
         Padding(vpack(bodylist), (25, 0, 0, 0))])
 
+@semantic(expr, Group('vararg', [expr]))
+def varg_argument(expr):
+    yield hpack(sans('*', defaultlayout.fontsize, color=defaultlayout.gray) + expr)
+
+@semantic(expr, String("float-rgba"))
+def float_rgba_expression(hexdec):
+    try:
+        channels = [c / 255.0 for c in hex_to_rgb(hexdec[:])] + [1.0]
+        rgba = tuple(channels[:4])
+    except ValueError as v:
+        rgba = 1.0, 1.0, 1.0, 1.0
+    prefix = sans(' #', defaultlayout.fontsize, color=defaultlayout.gray)
+    text = sans(hexdec, defaultlayout.fontsize, color=defaultlayout.white)
+    yield Padding(
+            hpack([ImageBox(12, 10, 4, None, rgba)] + prefix + text),
+            (1, 1, 1, 1),
+            Patch9('assets/border-1px.png'))
+    yield Glue(2)
+
+def hex_to_rgb(value):
+    lv = len(value)
+    return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
+
 @semantic(stmt, Context('expr'))
 def passthrough(exprs):
     return exprs
