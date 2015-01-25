@@ -16,8 +16,9 @@ class Node(object):
 
 class Symbol(Node):
     type = 'symbol'
-    def __init__(self, string):
+    def __init__(self, string, ident=''):
         self.string = string
+        self.ident = ident
 
     def copy(self):
         return self.__class__(self.string)
@@ -52,16 +53,16 @@ class Literal(Node):
         self.contents = contents
         self.ident = ident
         self.label = label
-        if isinstance(contents, list):
+        if isinstance(contents, str):
+            self.type = 'binary'
+        elif isinstance(contents, unicode):
+            self.type = 'string'
+        else:
             self.type = 'list'
             for node in contents:
                 assert isinstance(node, Node)
                 assert node.parent is None
                 node.parent = self
-        elif isinstance(contents, str):
-            self.type = 'binary'
-        elif isinstance(contents, unicode):
-            self.type = 'string'
     
     def __repr__(self):
         return "Literal({0.ident!r}, {0.label!r}, {0.type})".format(self)
@@ -132,42 +133,41 @@ def node_insert(document, node):
         return
     assert node.document is None
     node.document = document
-    if isinstance(node, Literal):
-        if node.ident == "" or node.ident in document.nodes:
-            ident = chr(randint(1, 255))
-            while ident in document.nodes:
-                ident += chr(randint(0, 255))
-            node.ident = ident
-        document.nodes[node.ident] = node
-        if node.type == 'list':
-            for subnode in node:
-                node_insert(document, subnode)
+    if node.ident == "" or node.ident in document.nodes:
+        ident = chr(randint(1, 255))
+        while ident in document.nodes:
+            ident += chr(randint(0, 255))
+        node.ident = ident
+    document.nodes[node.ident] = node
+    if node.type == 'list':
+        for subnode in node:
+            node_insert(document, subnode)
 
 def node_remove(document, node):
     assert node.document is document
     node.document = None
     if document is None:
         return
-    if isinstance(node, Literal):
-        del document.nodes[node.ident]
-        if node.type == 'list':
-            for subnode in node:
-                node_remove(document, subnode)
+    del document.nodes[node.ident]
+    if node.type == 'list':
+        for subnode in node:
+            node_remove(document, subnode)
 
 def transform_enc(node):
     if isinstance(node, Symbol):
-        return node.string
+        return (node.string, None, node.ident)
     if isinstance(node, Literal):
-        return (node.ident, node.label, node.contents)
+        return (node.label, node.contents, node.ident)
 
-def transform_dec(obj):
-    if isinstance(obj, tuple):
-        return Literal(*obj)
-    return Symbol(obj)
+def transform_dec(label, contents, ident):
+    if contents is None:
+        return Symbol(label, ident)
+    else:
+        return Literal(ident, label, contents)
 
 def load(path):
     with open(path, 'rb') as fd:
-        contents = textended.load(fd, transform_dec)
+        contents = list(textended.load(fd, transform_dec))
     return contents
 
 def dump(fd, document):
