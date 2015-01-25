@@ -82,6 +82,8 @@ def expr_as_statement(env, expr):
 @semantic(expr, Symbol())
 def symbol_expression(env, symbol):
     if symbol[:1].isdigit():
+        if '.' in symbol:
+            return ast.Num(float(symbol), lineno=0, col_offset=0)
         return ast.Num(int(symbol), lineno=0, col_offset=0)
     else:
         return ast.Name(as_python_sym(symbol), ast.Load(), lineno=0, col_offset=0)
