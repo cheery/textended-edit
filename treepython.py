@@ -111,19 +111,16 @@ def attr_expression(env, subj, name):
     return ast.Attribute(subj, as_python_sym(name), ast.Store(), lineno=0, col_offset=0)
 
 def put_error_string(errors, node, message):
-    if isinstance(node, dom.Literal):
-        if node.document.filename is not None:
-            error = dom.Literal("", u"reference", [
-                dom.Literal("", u"", node.ident),
-                dom.Literal("", u"", unicode(node.document.filename)),
-                dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])])
-        else:
-            error = dom.Literal("", u"reference", [
-                dom.Literal("", u"", node.ident),
-                dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])])
-        errors.append(error)
+    if node.document.filename is not None:
+        error = dom.Literal("", u"reference", [
+            dom.Literal("", u"", node.ident),
+            dom.Literal("", u"", unicode(node.document.filename)),
+            dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])])
     else:
-        print 'warning: error string with no literal'
+        error = dom.Literal("", u"reference", [
+            dom.Literal("", u"", node.ident),
+            dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])])
+    errors.append(error)
 
 class Env(object):
     def __init__(self):
