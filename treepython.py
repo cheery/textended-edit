@@ -15,7 +15,7 @@ def translate_pattern(env, node, pattern):#, func=None):
     if result is None:
         raise TranslationError(node, pattern)
     match, context = result
-    if isinstance(match, recognizer.Group):
+    if isinstance(match, Group):
         gen = iter(node)
         out = [translate_pattern(env, gen.next(), pat) for pat in match.args]
         if match.varg:
