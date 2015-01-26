@@ -1,7 +1,7 @@
 class Frame(object):
     parent = None
     quad = None
-    clue = None
+    hint = None
     subj = None
     index = -1
     offset = 0
@@ -12,6 +12,11 @@ class Frame(object):
         self.subj = subj
         self.index = index
         return self
+
+    def get_hint(self, name, default=None):
+        if self.hint is not None:
+            return self.hint.get(name, default)
+        return default
 
 class Box(Frame):
     def __init__(self, width, height, depth):
@@ -25,7 +30,6 @@ class Box(Frame):
         return self.height + self.depth
 
 class LetterBox(Box):
-    clue = 'horizontal'
     def __init__(self, width, height, depth, font, texcoords, padding, color):
         Box.__init__(self, width, height, depth)
         self.font = font
@@ -34,14 +38,12 @@ class LetterBox(Box):
         self.color = color
 
 class ImageBox(Box):
-    clue = 'horizontal'
     def __init__(self, width, height, depth, source, color):
         Box.__init__(self, width, height, depth)
         self.source = source
         self.color = color
 
 class Glue(Frame):
-    clue = 'horizontal'
     def __init__(self, width, shrink=0, stretch=0):
         self.width = width
         self.shrink = shrink
