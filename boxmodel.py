@@ -106,8 +106,8 @@ def hpack(contents, to_dimen=None):
         if isinstance(node, Frame):
             width += node.width
         if isinstance(node, Box):
-            height = max(height, node.height + node.shift)
-            depth = max(depth, node.depth - node.shift)
+            height = max(height, node.height - node.shift)
+            depth = max(depth, node.depth + node.shift)
         if isinstance(node, Glue):
             shrink = sum_dimen(shrink, node.shrink)
             stretch = sum_dimen(stretch, node.stretch)

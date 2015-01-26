@@ -11,13 +11,19 @@ alias = Context('alias')
 stmt = Context('stmt')
 expr = Context('expr')
 expr_set = Context('expr=')
+subscript = Context('subscript')
 
 def translate_pattern(mapping, env, pattern):
     result = pattern.scan(grammar, mapping.subj)
     if result is None:
         return defaultlayout.build(mapping, env)
     match, context = result
-    if isinstance(match, recognizer.Group):
+    for c in reversed(context):
+        if callable(c.pre):
+            env = c.pre(mapping, env)
+    if callable(match.pre):
+        out = match.pre(mapping, env, match)
+    elif isinstance(match, recognizer.Group):
         gen = iter(mapping)
         out = [gen.next().update(translate_pattern, env, pat) for pat in match.args]
         if match.varg:
@@ -34,10 +40,27 @@ def translate_pattern(mapping, env, pattern):
             out = c.post(env, out)
     return out
 
+def group_with_env(mapping, group, envs):
+    gen = iter(mapping)
+    envs = iter(envs)
+    out = [gen.next().update(translate_pattern, envs.next(), pat) for pat in group.args]
+    if group.varg:
+        out.append([rem.update(translate_pattern, envs.next(), group.varg) for rem in gen])
+    return out
+
+def pre_semantic(ctx, pattern):
+    def _impl_(func):
+        pattern.pre =  func
+        if pattern not in grammar[ctx.name]:
+            grammar[ctx.name].append(pattern)
+        return func
+    return _impl_
+
 def semantic(ctx, pattern):
     def _impl_(func):
         pattern.post = func
-        grammar[ctx.name].append(pattern)
+        if pattern not in grammar[ctx.name]:
+            grammar[ctx.name].append(pattern)
         return func
     return _impl_
 
@@ -111,13 +134,28 @@ def hex_to_rgb(value):
     return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
 
 @semantic(stmt, Context('expr'))
+@semantic(subscript, Context('expr'))
 def passthrough(env, exprs):
     return exprs
+
+@semantic(subscript, String(""))
+def without_quotes(env, subj):
+    return env['font'](subj, env['fontsize'], color=env['yellow'])
 
 @semantic(expr, Group('attr', [expr, Symbol()]))
 @semantic(expr_set, Group('attr', [expr, Symbol()]))
 def layout_attr(env, expr, name):
     yield hpack(expr + env['font']('.', env['fontsize']) + name)
+
+@pre_semantic(expr, Group('sub', [expr, subscript]))
+@pre_semantic(expr_set, Group('sub', [expr, subscript]))
+def pre_subscript(mapping, env, group):
+    sub_env = env.copy()
+    sub_env.update(fontsize=env['fontsize'] - 1)
+    lhs, rhs = group_with_env(mapping, group, [env, sub_env])
+    for r in rhs:
+        r.shift = 4
+    yield hpack(lhs + [Glue(-1)] + rhs)
 
 @semantic(stmt, Group('assign', [expr_set, expr]))
 def layout_assign(env, lhs, rhs):

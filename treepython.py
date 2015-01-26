@@ -10,6 +10,7 @@ stmt = Context('stmt')
 expr = Context('expr')
 argument = Context('argument')
 expr_set = Context('expr=')
+subscript = Context('subscript')
 
 def translate_pattern(env, node, pattern):#, func=None):
     result = pattern.scan(grammar, node)
@@ -138,6 +139,17 @@ def hex_to_rgb(value):
     lv = len(value)
     return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
 
+@semantic(subscript, Context('expr'))
+def expr_subscript(env, expr):
+    return ast.Index(expr, lineno=0, col_offset=0)
+
+@semantic(expr, Group('sub', [expr, subscript]))
+def subscript_expr(env, value, slic):
+    return ast.Subscript(value, slic, ast.Load(), lineno=0, col_offset=0)
+
+@semantic(expr_set, Group('sub', [expr, subscript]))
+def subscript_expr_set(env, value, slic):
+    return ast.Subscript(value, slic, ast.Store(), lineno=0, col_offset=0)
 
 @semantic(expr_set, Symbol())
 def symbol_store(env, name):
