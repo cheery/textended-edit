@@ -4,8 +4,9 @@ import boxmodel
 import sys
 
 class KeyEvent(object):
-    def __init__(self, mode, editor, key, mods, text):
+    def __init__(self, mode, workspace, editor, key, mods, text):
         self.mode = mode
+        self.workspace = workspace
         self.editor = editor
         self.key = key
         self.mods = mods
@@ -259,6 +260,7 @@ def evaluate_document(event):
     try:
         treepython.evaluate_document(event.editor.document)
     except treepython.SemanticErrors as ser:
+        event.workspace.attach(ser.document, '<evaluation error>')
         event.editor.create_layer(ser.document)
 
 @insert.key('up')

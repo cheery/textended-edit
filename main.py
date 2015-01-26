@@ -25,6 +25,9 @@ import dom
 from dom import Position, Selection
 from ctypes import c_int, byref, c_char, POINTER, c_void_p
 from sdl2 import *
+from workspace import Workspace
+
+workspace = Workspace()
 
 debug_layout = False
 
@@ -115,24 +118,6 @@ class Bridge(object):
 
 module = sys.modules[__name__]
 
-def create_editor(images):
-    if len(sys.argv) > 1:
-        filename = sys.argv[1]
-        if os.path.exists(filename):
-            body = dom.Literal("", u"", dom.load(filename))
-        else:
-            body = dom.Literal("", u"", [])
-        document = dom.Document(body, filename)
-    else:
-        body = dom.Literal("", u"", [])
-        document = dom.Document(body, None)
-    selection = Selection.bottom(body)
-    editor = Editor(images, document, selection)
-    for path in sys.argv[2:]:
-        overlay_document = dom.Document(dom.Literal("", u"", dom.load(path)))
-        editor.create_layer(overlay_document)
-    return editor
-
 SDL_Init(SDL_INIT_VIDEO)
 SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)
 window = SDL_CreateWindow(b"textended-edit",
@@ -149,6 +134,16 @@ height = height.value
 
 images = renderers.ImageResources()
 
+def create_editor(images):
+    if len(sys.argv) > 1:
+        document = workspace.get(sys.argv[1])
+    else:
+        document = workspace.new()
+    selection = Selection.bottom(document.body)
+    editor = Editor(images, document, selection)
+    for path in sys.argv[2:]:
+        editor.create_layer(workspace.get(path, create=False))
+    return editor
 editor = create_editor(images)
 focus = editor
 editor.width = width
@@ -545,7 +540,7 @@ while live:
     update = False
     for key, mod, text in keyboard:
         update = True
-        key_event = keybindings.KeyEvent(mode, focus, key, mod, text)
+        key_event = keybindings.KeyEvent(mode, workspace, focus, key, mod, text)
         valid = [binding for binding in mode.bindings if binding(key_event)]
         try:
             if len(valid) > 1:
