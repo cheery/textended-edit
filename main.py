@@ -525,6 +525,9 @@ while live:
                 focus.selection = simplify_selection(focus.headpos, focus.tailpos)
         elif event.type == SDL_MOUSEBUTTONUP:
             pass
+        elif event.type == SDL_MOUSEWHEEL:
+            editor.scroll_x -= event.wheel.x * 10.0
+            editor.scroll_y -= event.wheel.y * 10.0
         else:
             keyboard.push_event(event)
 
