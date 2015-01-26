@@ -3,7 +3,11 @@ import layout, font, boxmodel, dom
 def build(mapping, env):
     node = mapping.subj
     if isinstance(node, dom.Symbol):
-        return [boxmodel.hpack(env['font'](node, env['fontsize'], color=env['white']))]
+        sym = env['font'](node, env['fontsize'], color=env['white'])
+        if len(node) == 0:
+            return [boxmodel.hpack(plaintext(env, "|", color=env['gray']) + sym + plaintext(env, "|", color=env['gray']))]
+        else:
+            return [boxmodel.hpack(sym)]
     if isinstance(node.contents, str):
         if len(node.label) > 0:
             prefix = env['font'](node.label, env['fontsize'], color=env['blue'])
@@ -41,6 +45,11 @@ def build(mapping, env):
             tokens.extend(submapping.update(build, env))
             space = True
         return [lazy_lisp_break(env, tokens, 300)]
+
+def plaintext(env, text, size=None, color=None):
+    size = env['fontsize'] if size is None else size
+    colr = env['white'] if color is None else color
+    return env['font'](text, size, color=color)
 
 def lazy_lisp_break(env, tokens, max_width):
     columns = []
