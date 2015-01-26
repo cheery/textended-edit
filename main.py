@@ -107,7 +107,10 @@ module = sys.modules[__name__]
 def create_editor(images):
     if len(sys.argv) > 1:
         filename = sys.argv[1]
-        body = dom.Literal("", u"", dom.load(filename))
+        if os.path.exists(filename):
+            body = dom.Literal("", u"", dom.load(filename))
+        else:
+            body = dom.Literal("", u"", [])
         document = dom.Document(body, filename)
     else:
         body = dom.Literal("", u"", [])
