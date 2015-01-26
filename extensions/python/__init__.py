@@ -4,7 +4,6 @@ import dom
 from collections import defaultdict
 from recognizer import Group, String, Symbol, Context
 from boxmodel import *
-from defaultlayout import sans
 
 grammar = defaultdict(list)
 
@@ -13,26 +12,26 @@ stmt = Context('stmt')
 expr = Context('expr')
 expr_set = Context('expr=')
 
-def translate_pattern(mapping, pattern):
+def translate_pattern(mapping, env, pattern):
     result = pattern.scan(grammar, mapping.subj)
     if result is None:
-        return defaultlayout.build(mapping)
+        return defaultlayout.build(mapping, env)
     match, context = result
     if isinstance(match, recognizer.Group):
         gen = iter(mapping)
-        out = [gen.next().update(translate_pattern, pat) for pat in match.args]
+        out = [gen.next().update(translate_pattern, env, pat) for pat in match.args]
         if match.varg:
-            out.append([rem.update(translate_pattern, match.varg) for rem in gen])
+            out.append([rem.update(translate_pattern, env, match.varg) for rem in gen])
         if callable(match.post):
-            out = match.post(*out)
+            out = match.post(env, *out)
     else:
         if callable(match.post):
-            out = match.post(mapping.subj)
+            out = match.post(env, mapping.subj)
         else:
-            out = sans(mapping.subj, defaultlayout.fontsize, color=defaultlayout.white)
+            out = env['font'](mapping.subj, env['fontsize'], color=env['white'])
     for c in context:
         if callable(c.post):
-            out = c.post(out)
+            out = c.post(env, out)
     return out
 
 def semantic(ctx, pattern):
@@ -43,41 +42,41 @@ def semantic(ctx, pattern):
     return _impl_
 
 @semantic(stmt, Group('return', [expr]))
-def layout_return(expr):
-    ret = sans('return ', defaultlayout.fontsize, color=defaultlayout.blue)
+def layout_return(env, expr):
+    ret = env['font']('return ', env['fontsize'], color=env['blue'])
     yield hpack(ret + expr)
 
 @semantic(stmt, Group('print', [], expr))
-def layout_print(exprs):
-    tokens = sans('print', defaultlayout.fontsize, color=defaultlayout.blue)
+def layout_print(env, exprs):
+    tokens = env['font']('print', env['fontsize'], color=env['blue'])
     for expr in exprs:
-        tokens.extend(sans(' ', defaultlayout.fontsize))
+        tokens.extend(env['font'](' ', env['fontsize']))
         tokens.extend(expr)
     yield hpack(tokens)
 
 @semantic(stmt, Group('import', [], alias))
-def layout_import(aliases):
-    tokens = sans('import', defaultlayout.fontsize, color=defaultlayout.blue)
+def layout_import(env, aliases):
+    tokens = env['font']('import', env['fontsize'], color=env['blue'])
     for alias in aliases:
-        tokens.extend(sans(" ", defaultlayout.fontsize))
+        tokens.extend(env['font'](" ", env['fontsize']))
         tokens.extend(alias)
     yield hpack(tokens)
 
 @semantic(alias, Symbol())
-def layout_alias_symbol(node):
-    return sans(node, defaultlayout.fontsize)
+def layout_alias_symbol(env, node):
+    return env['font'](node, env['fontsize'])
 
 @semantic(stmt, Group('define', [Symbol(), Group('', [], Symbol())], stmt))
-def layout_def(name, arglist, body):
-    tokens = sans('def', defaultlayout.fontsize, color=defaultlayout.blue)
-    tokens.extend(sans(" ", defaultlayout.fontsize))
+def layout_def(env, name, arglist, body):
+    tokens = env['font']('def', env['fontsize'], color=env['blue'])
+    tokens.extend(env['font'](" ", env['fontsize']))
     tokens.extend(name)
-    tokens.extend(sans('(', defaultlayout.fontsize, color=defaultlayout.gray))
+    tokens.extend(env['font']('(', env['fontsize'], color=env['gray']))
     for i, arg in enumerate(arglist[0]):
         if i > 0:
-            tokens.extend(sans(" ", defaultlayout.fontsize))
+            tokens.extend(env['font'](" ", env['fontsize']))
         tokens.extend(arg)
-    tokens.extend(sans('):', defaultlayout.fontsize, color=defaultlayout.gray))
+    tokens.extend(env['font']('):', env['fontsize'], color=env['gray']))
     hpack(tokens)
 
     bodylist = []
@@ -89,18 +88,18 @@ def layout_def(name, arglist, body):
         Padding(vpack(bodylist), (25, 0, 0, 0))])
 
 @semantic(expr, Group('vararg', [expr]))
-def varg_argument(expr):
-    yield hpack(sans('*', defaultlayout.fontsize, color=defaultlayout.gray) + expr)
+def varg_argument(env, expr):
+    yield hpack(env['font']('*', env['fontsize'], color=env['gray']) + expr)
 
 @semantic(expr, String("float-rgba"))
-def float_rgba_expression(hexdec):
+def float_rgba_expression(env, hexdec):
     try:
         channels = [c / 255.0 for c in hex_to_rgb(hexdec[:])] + [1.0]
         rgba = tuple(channels[:4])
     except ValueError as v:
         rgba = 1.0, 1.0, 1.0, 1.0
-    prefix = sans(' #', defaultlayout.fontsize, color=defaultlayout.gray)
-    text = sans(hexdec, defaultlayout.fontsize, color=defaultlayout.white)
+    prefix = env['font'](' #', env['fontsize'], color=env['gray'])
+    text = env['font'](hexdec, env['fontsize'], color=env['white'])
     yield Padding(
             hpack([ImageBox(12, 10, 4, None, rgba)] + prefix + text),
             (1, 1, 1, 1),
@@ -112,31 +111,31 @@ def hex_to_rgb(value):
     return tuple(int(value[i:i + lv // 3], 16) for i in range(0, lv, lv // 3))
 
 @semantic(stmt, Context('expr'))
-def passthrough(exprs):
+def passthrough(env, exprs):
     return exprs
 
 @semantic(expr, Group('attr', [expr, Symbol()]))
 @semantic(expr_set, Group('attr', [expr, Symbol()]))
-def layout_attr(expr, name):
-    yield hpack(expr + sans('.', defaultlayout.fontsize) + name)
+def layout_attr(env, expr, name):
+    yield hpack(expr + env['font']('.', env['fontsize']) + name)
 
 @semantic(stmt, Group('assign', [expr_set, expr]))
-def layout_assign(lhs, rhs):
-    yield hpack(lhs + sans(' = ', defaultlayout.fontsize, color=defaultlayout.gray) + rhs)
+def layout_assign(env, lhs, rhs):
+    yield hpack(lhs + env['font'](' = ', env['fontsize'], color=env['gray']) + rhs)
 
 @semantic(expr, Group('', [expr],expr))
-def layout_call(callee, arglist):
+def layout_call(env, callee, arglist):
     base = list(callee)
-    base.extend(sans('(', defaultlayout.fontsize, color=defaultlayout.gray))
+    base.extend(env['font']('(', env['fontsize'], color=env['gray']))
     for i, tokens in enumerate(arglist):
         if i > 0:
-            base.extend(sans(', ', defaultlayout.fontsize, color=defaultlayout.gray))
+            base.extend(env['font'](', ', env['fontsize'], color=env['gray']))
         base.extend(tokens)
-    base.extend(sans(')', defaultlayout.fontsize, color=defaultlayout.gray))
+    base.extend(env['font'](')', env['fontsize'], color=env['gray']))
     yield hpack(base)
 
-def layout(mapping, *args):
+def layout(mapping, env):
     for submapping in mapping:
-        for token in submapping.update(translate_pattern, stmt):
+        for token in submapping.update(translate_pattern, env, stmt):
             yield token
             yield Glue(3)

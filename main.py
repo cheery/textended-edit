@@ -28,6 +28,17 @@ from sdl2 import *
 
 debug_layout = False
 
+default_env = {
+        'font': font.load('OpenSans.fnt'),
+        'fontsize': 10,
+        'white': (1.0, 1.0, 1.0, 1.0),
+        'blue': (0.5, 0.5, 1.0, 1.0),
+        'green': (1.0, 1.0, 0.0, 1.0),
+        'yellow': (1.0, 1.0, 0.0, 1.0),
+        'pink': (1.0, 0.0, 1.0, 1.0),
+        'gray': (0.5, 0.5, 0.5, 1.0),
+}
+
 class Editor(object):
     def __init__(self, images, document, selection, x=0, y=0, width=200, height=200):
         self.images = images
@@ -151,7 +162,7 @@ def update_document(t):
     def layout_editor(editor):
         editor.mappings.clear()
         editor.compositor.clear()
-        editor.rootbox = boxmodel.vpack(editor.mapping.update(editor.build_layout))
+        editor.rootbox = boxmodel.vpack(editor.mapping.update(editor.build_layout, default_env))
         editor.inner_width = editor.rootbox.width + 20
         editor.inner_height = editor.rootbox.vsize + 20
         editor.position_hook(editor)
@@ -227,7 +238,7 @@ def update_bridges():
         referenced = editor.document.nodes.get(bridge.reference)
         if referenced not in editor.mappings:
             continue
-        bridge.rootbox = boxmodel.vpack(bridge.mapping.update(bridge.build_layout))
+        bridge.rootbox = boxmodel.vpack(bridge.mapping.update(bridge.build_layout, default_env))
         x0, y0, x1, y1 = editor.mappings[referenced].tokens[0].quad
         editor.compositor.decor((x0,y0,x1,y1), boxmodel.Patch9("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
         bridge.y = y0

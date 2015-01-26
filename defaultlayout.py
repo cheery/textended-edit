@@ -1,59 +1,48 @@
 import layout, font, boxmodel, dom
 
-sans = font.load('OpenSans.fnt')
-fontsize = 10
-fontsize_small = 6
-
-white  = 1.0, 1.0, 1.0, 1.0
-blue   = 0.5, 0.5, 1.0, 1.0
-green  = 1.0, 1.0, 0.0, 1.0
-yellow = 1.0, 1.0, 0.0, 1.0
-pink   = 1.0, 0.0, 1.0, 1.0
-gray   = 0.5, 0.5, 0.5, 1.0
-
-def build(mapping):
+def build(mapping, env):
     node = mapping.subj
     if isinstance(node, dom.Symbol):
-        return [boxmodel.hpack(sans(node, fontsize, color=white))]
+        return [boxmodel.hpack(env['font'](node, env['fontsize'], color=env['white']))]
     if isinstance(node.contents, str):
         if len(node.label) > 0:
-            prefix = sans(node.label, fontsize, color=blue)
-            prefix += sans('#', fontsize, color=pink)
-            postfix = sans('#', fontsize, color=pink)
+            prefix = env['font'](node.label, env['fontsize'], color=env['blue'])
+            prefix += env['font']('#', env['fontsize'], color=env['pink'])
+            postfix = env['font']('#', env['fontsize'], color=env['pink'])
         else:
-            prefix = sans('#', fontsize, color=pink)
-            postfix = sans('#', fontsize, color=pink)
-        return [boxmodel.hpack(prefix + sans(node, fontsize, color=pink) + postfix)]
+            prefix = env['font']('#', env['fontsize'], color=env['pink'])
+            postfix = env['font']('#', env['fontsize'], color=env['pink'])
+        return [boxmodel.hpack(prefix + env['font'](node, env['fontsize'], color=env['pink']) + postfix)]
     elif isinstance(node.contents, unicode):
         if len(node.label) > 0:
-            prefix = sans(node.label, fontsize, color=blue)
-            prefix += sans('"', fontsize, color=green)
-            postfix = sans('"', fontsize, color=green)
+            prefix = env['font'](node.label, env['fontsize'], color=env['blue'])
+            prefix += env['font']('"', env['fontsize'], color=env['green'])
+            postfix = env['font']('"', env['fontsize'], color=env['green'])
         else:
-            prefix = sans('"', fontsize, color=green)
-            postfix = sans('"', fontsize, color=green)
-        return [boxmodel.hpack(prefix + sans(node, fontsize, color=green) + postfix)]
+            prefix = env['font']('"', env['fontsize'], color=env['green'])
+            postfix = env['font']('"', env['fontsize'], color=env['green'])
+        return [boxmodel.hpack(prefix + env['font'](node, env['fontsize'], color=env['green']) + postfix)]
     elif mapping.index is None:
         tokens = []
         for submapping in mapping:
             if submapping.index > 0:
                 tokens.append(boxmodel.Glue(4))
-            tokens.extend(submapping.update(build))
+            tokens.extend(submapping.update(build, env))
         return tokens
     else:
         tokens = []
         space = False
         if len(node.label) > 0:
-            tokens.append(boxmodel.hpack(sans(node.label, fontsize, color=blue)))
+            tokens.append(boxmodel.hpack(env['font'](node.label, env['fontsize'], color=env['blue'])))
             space = True
         for submapping in mapping:
             if space:
-                tokens.extend(sans(' ', fontsize, color=white))
-            tokens.extend(submapping.update(build))
+                tokens.extend(env['font'](' ', env['fontsize'], color=env['white']))
+            tokens.extend(submapping.update(build, env))
             space = True
-        return [lazy_lisp_break(tokens, 300)]
+        return [lazy_lisp_break(env, tokens, 300)]
 
-def lazy_lisp_break(tokens, max_width):
+def lazy_lisp_break(env, tokens, max_width):
     columns = []
     line = []
     width = 0
@@ -76,7 +65,7 @@ def lazy_lisp_break(tokens, max_width):
                 boxmodel.vpack(columns),
                 (10, 0, 0, 0),
                 boxmodel.Patch9("assets/border-left-1px.png"),
-                color=gray)])
+                color=env['gray'])])
     else:
-        line = sans('(', fontsize, color=gray) + line + sans(')', fontsize, color=gray)
+        line = env['font']('(', env['fontsize'], color=env['gray']) + line + env['font'](')', env['fontsize'], color=env['gray'])
         return boxmodel.hpack(line)
