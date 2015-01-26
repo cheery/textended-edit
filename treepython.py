@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import dom, sys, os, ast, imp
+import traceback
 from collections import defaultdict
 from recognizer import Group, String, Symbol, Context
 
@@ -13,6 +14,7 @@ expr_set = Context('expr=')
 subscript = Context('subscript')
 
 def translate_pattern(env, node, pattern):#, func=None):
+    env.subj = node
     result = pattern.scan(grammar, node)
     if result is None:
         raise TranslationError(node, pattern)
@@ -57,11 +59,11 @@ def as_python_sym(name):
 
 @semantic(stmt, Group('return', [expr]))
 def return_statement(env, expr):
-    return ast.Return(expr, lineno=0, col_offset=0)
+    return env.new_node(ast.Return, expr)
 
 @semantic(stmt, Group('print', [], expr))
 def print_statement(env, exprs):
-    return ast.Print(None, exprs, True, lineno=0, col_offset=0)
+    return env.new_node(ast.Print, None, exprs, True)
 
 @semantic(stmt, Group('import', [], alias))
 def import_statement(env, aliases):
@@ -69,42 +71,42 @@ def import_statement(env, aliases):
 
 @semantic(alias, Symbol())
 def symbol_alias(env, name):
-    return ast.alias(as_python_sym(name), None)
+    return env.new_node(ast.alias, as_python_sym(name), None)
 
 @semantic(stmt, Group('define', [Symbol(), Group('', [], Symbol())],stmt))
 def def_statement(env, name, arglist, statements):
-    return ast.FunctionDef(
+    return env.new_node(ast.FunctionDef,
         as_python_sym(name),
         ast.arguments([
             ast.Name(as_python_sym(a), ast.Param(), lineno=0, col_offset=0)
             for a in arglist[0]], None, None, []),
         statements, 
-        [], lineno=0, col_offset=0)
+        [])
 
 @semantic(stmt, Context('expr'))
 def expr_as_statement(env, expr):
-    return ast.Expr(expr, lineno=0, col_offset=0)
+    return env.new_node(ast.Expr, expr)
 
 @semantic(expr, Symbol())
 def symbol_expression(env, symbol):
     if symbol[:1].isdigit():
         if '.' in symbol:
-            return ast.Num(float(symbol), lineno=0, col_offset=0)
-        return ast.Num(int(symbol), lineno=0, col_offset=0)
+            return env.new_node(ast.Num, float(symbol))
+        return env.new_node(ast.Num, int(symbol))
     else:
-        return ast.Name(as_python_sym(symbol), ast.Load(), lineno=0, col_offset=0)
+        return env.new_node(ast.Name, as_python_sym(symbol), ast.Load())
 
 @semantic(expr, String(''))
 def string_expression(env, string):
-    return ast.Str(string, lineno=0, col_offset=0)
+    return env.new_node(ast.Str, string)
 
 @semantic(expr, Group('attr', [expr, Symbol()]))
 def attr_expression(env, subj, name):
-    return ast.Attribute(subj, as_python_sym(name), ast.Load(), lineno=0, col_offset=0)
+    return env.new_node(ast.Attribute, subj, as_python_sym(name), ast.Load())
 
 @semantic(stmt, Group('assign', [expr_set, expr]))
 def assign_expression(env, target, value):
-    return ast.Assign([target], value, lineno=0, col_offset=0)
+    return env.new_node(ast.Assign, [target], value)
 
 @semantic(argument, Context('expr'))
 def expr_as_argument(env, expr):
@@ -125,15 +127,14 @@ def call_expression(env, func, argv):
             varg = expr
         else:
             assert False, "should not happen"
-    return ast.Call(func, args, [], varg, None, lineno=0, col_offset=0)
+    return env.new_node(ast.Call, func, args, [], varg, None)
 
 @semantic(expr, String("float-rgba"))
 def float_rgba_expression(env, hexdec):
     channels = [c / 255.0 for c in hex_to_rgb(hexdec)] + [1.0]
-    return ast.Tuple(
+    return env.new_node(ast.Tuple,
         [ast.Num(x, lineno=0, col_offset=0) for x in channels[:4]],
-        ast.Load(),
-        lineno=0, col_offset=0)
+        ast.Load())
 
 def hex_to_rgb(value):
     lv = len(value)
@@ -141,23 +142,23 @@ def hex_to_rgb(value):
 
 @semantic(subscript, Context('expr'))
 def expr_subscript(env, expr):
-    return ast.Index(expr, lineno=0, col_offset=0)
+    return env.new_node(ast.Index, expr)
 
 @semantic(expr, Group('sub', [expr, subscript]))
 def subscript_expr(env, value, slic):
-    return ast.Subscript(value, slic, ast.Load(), lineno=0, col_offset=0)
+    return env.new_node(ast.Subscript, value, slic, ast.Load())
 
 @semantic(expr_set, Group('sub', [expr, subscript]))
 def subscript_expr_set(env, value, slic):
-    return ast.Subscript(value, slic, ast.Store(), lineno=0, col_offset=0)
+    return env.new_node(ast.Subscript, value, slic, ast.Store())
 
 @semantic(expr_set, Symbol())
 def symbol_store(env, name):
-    return ast.Name(as_python_sym(name), ast.Store(), lineno=0, col_offset=0)
+    return env.new_node(ast.Name, as_python_sym(name), ast.Store())
 
 @semantic(expr_set, Group('attr', [expr, Symbol()]))
 def attr_expression(env, subj, name):
-    return ast.Attribute(subj, as_python_sym(name), ast.Store(), lineno=0, col_offset=0)
+    return env.new_node(ast.Attribute, subj, as_python_sym(name), ast.Store())
 
 def put_error_string(errors, node, message):
     if node.document.filename is not None:
@@ -173,7 +174,14 @@ def put_error_string(errors, node, message):
 
 class Env(object):
     def __init__(self):
-        self.errors = [] 
+        self.errors = []
+        self.subj = None
+
+    def new_node(self, cls, *args, **kwargs):
+        node = cls(*args, **kwargs)
+        node.lineno = ident_to_lineno(self.subj.ident)
+        node.col_offset = 0
+        return node
 
 class SemanticErrors(Exception):
     def __init__(self, document, filename):
@@ -274,6 +282,20 @@ class MetaImporter(object):
         if path:
             return MetaLoader(path, ispkg)
 
+def ident_to_lineno(ident):
+    lineno = 0
+    for ch in ident:
+        lineno <<= 8
+        lineno |= ord(ch)
+    return lineno
+
+def lineno_to_ident(lineno):
+    ident = ''
+    while lineno > 0:
+        ident = chr(lineno & 255) + ident
+        lineno >>= 8
+    return ident
+
 sys.meta_path.insert(0, MetaImporter())
 
 if __name__=='__main__':
@@ -291,3 +313,30 @@ if __name__=='__main__':
         else:
             print "semantic errors, route stderr to file"
         sys.exit(1)
+    except Exception:
+        if sys.stderr.isatty():
+            traceback.print_exc()
+            sys.stderr.write("Pipeline stderr to a file or invoke from an editor to get structured file.\n")
+        else:
+            errors = []
+            errors.append(dom.Literal('', u'language', u"python_traceback"))
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            for filename, lineno, location, line in traceback.extract_tb(exc_traceback):
+                if line is not None:
+                    errors.append(dom.Literal('', u'tracerecord-text', [
+                        dom.Literal('', u'', filename.decode('utf-8')),
+                        dom.Symbol(unicode(lineno)),
+                        dom.Literal('', u'', location.decode('utf-8')),
+                        dom.Literal('', u'', line.decode('utf-8')),
+                    ]))
+                else:
+                    errors.append(dom.Literal('', u'tracerecord', [
+                        dom.Literal('', u'', filename.decode('utf-8')),
+                        dom.Literal('', u'', lineno_to_ident(lineno)),
+                    ]))
+            errors.append(dom.Literal('', u'tracemessage', [
+                dom.Literal('', u'', exc_type.__name__.decode('utf-8')),
+                dom.Literal('', u'', str(exc_value).decode('utf-8')),
+            ]))
+            document = dom.Document(dom.Literal('', u'', errors))
+            dom.dump(sys.stderr, document)
