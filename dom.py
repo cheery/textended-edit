@@ -7,7 +7,6 @@ class Document(object):
         self.nodes = {}
         self.body = node_insert(self, body)
         self.name = name
-
         self.history = []
 
     @property
@@ -16,14 +15,17 @@ class Document(object):
 
     def _update(self, change):
         self.history.append(change)
-        print self.ver 
 
     def undo(self):
         if len(self.history) == 0:
-            return False
+            return
         change = self.history.pop(-1)
-        change.undo()
-        return True
+        return change.undo()
+
+    def transaction(self, head, tail):
+        transaction = Transaction(self, head, tail)
+        self._update(transaction)
+        return transaction
 
 class Drop(object):
     def __init__(self, subj, index, dropped):
@@ -54,13 +56,32 @@ class Relabel(object):
     def undo(self):
         self.subj._label = self.old_label
 
-class Rollback(object):
-    def __init__(self, head, tail):
+class Transaction(object):
+    def __init__(self, document, head, tail):
+        self.document = document
         self.head = head
         self.tail = tail
 
+    def commit(self):
+        if self.document.history[-1] is self:
+            self.document.history.pop(-1)
+        else:
+            self.document._update(Commit(self))
+
+    def rollback(self):
+        index = self.document.history.index(self)
+        while len(self.document.history) > index+1:
+            change = self.document.history.pop(-1)
+            change.undo()
+        self.document.history.pop(-1)
+
 class Commit(object):
-    pass
+    def __init__(self, transaction):
+        self.transaction = transaction
+
+    def undo(self):
+        self.transaction.rollback()
+        return self.transaction
 
 class Node(object):
     document = None

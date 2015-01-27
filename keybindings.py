@@ -46,9 +46,28 @@ class Mode(object):
             return fn
         return _impl_
 
+def with_transaction(fn):
+    def _impl_(event):
+        selection = event.editor.selection
+        head = dom.Position(selection.subj, selection.head)
+        tail = dom.Position(selection.subj, selection.tail)
+        transaction = event.editor.document.transaction(head, tail)
+        try:
+            fn(event)
+        except Exception:
+            transaction.rollback()
+            selection.subj = transaction.head.subj
+            selection.head = transaction.head.index
+            selection.tail = transaction.tail.index
+            raise
+        else:
+            transaction.commit()
+    return _impl_
+
 insert = Mode('insert')
 node_insert = Mode('node insert', transition=insert)
 
+@with_transaction
 def insert_default(event):
     if event.text is None:
         return
@@ -74,6 +93,7 @@ def insert_page_down(event):
     event.editor.scroll_y -= event.editor.height / 2
 
 @insert.key('space')
+@with_transaction
 def insert_space(event):
     selection = event.editor.selection
     if selection.subj.isstring() or selection.subj.isbinary():
@@ -82,6 +102,7 @@ def insert_space(event):
         slit(selection)
 
 @insert.key('backspace')
+@with_transaction
 def insert_backspace(event):
     sel = event.editor.selection
     if sel.head == sel.tail and sel.head > 0:
@@ -89,6 +110,7 @@ def insert_backspace(event):
     sel.drop()
 
 @insert.key('delete')
+@with_transaction
 def insert_delete(event):
     sel = event.editor.selection
     if sel.head == sel.tail and sel.head < len(sel.subj):
@@ -96,14 +118,17 @@ def insert_delete(event):
     sel.drop()
 
 @insert.text("'")
+@with_transaction
 def insert_list(event):
     insert_new_node(event, list)
 
 @insert.text("#")
+@with_transaction
 def insert_binary(event):
     insert_new_node(event, str)
 
 @insert.text('"')
+@with_transaction
 def insert_string(event):
     insert_new_node(event, unicode)
 
@@ -222,7 +247,12 @@ def fall_right_leaf(node):
 
 @insert.key('z', 'ctrl')
 def undo_document(event):
-    event.editor.document.undo()
+    selection = event.editor.selection
+    transaction = event.editor.document.undo()
+    if transaction is not None:
+        selection.subj = transaction.head.subj
+        selection.head = transaction.head.index
+        selection.tail = transaction.tail.index
 
 @insert.key('q', 'ctrl')
 def save_document(event):
@@ -234,6 +264,7 @@ def save_document(event):
     dom.save(document.name, document.body)
 
 @insert.key('x', 'ctrl')
+@with_transaction
 def cut_document(event):
     selection = event.editor.selection
     document = event.editor.document
@@ -246,6 +277,7 @@ def copy_document(event):
     document.copybuf = selection.yank()
 
 @insert.key('v', 'ctrl')
+@with_transaction
 def paste_document(event):
     sel = event.editor.selection
     document = event.editor.document
