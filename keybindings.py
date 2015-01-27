@@ -61,7 +61,10 @@ def with_transaction(fn):
             selection.tail = transaction.tail.index
             raise
         else:
-            transaction.commit()
+            selection = event.editor.selection
+            head = dom.Position(selection.subj, selection.head)
+            tail = dom.Position(selection.subj, selection.tail)
+            transaction.commit(head, tail)
     return _impl_
 
 insert = Mode('insert')

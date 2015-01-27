@@ -62,11 +62,11 @@ class Transaction(object):
         self.head = head
         self.tail = tail
 
-    def commit(self):
+    def commit(self, head, tail):
         if self.document.history[-1] is self:
             self.document.history.pop(-1)
         else:
-            self.document._update(Commit(self))
+            self.document._update(Commit(self, head, tail))
 
     def rollback(self):
         index = self.document.history.index(self)
@@ -76,7 +76,9 @@ class Transaction(object):
         self.document.history.pop(-1)
 
 class Commit(object):
-    def __init__(self, transaction):
+    def __init__(self, transaction, head, tail):
+        self.head = head
+        self.tail = tail
         self.transaction = transaction
 
     def undo(self):
@@ -118,7 +120,7 @@ class Symbol(Node):
         stop = max(0, min(len(self), stop))
         text = self.string[start:stop]
         self.string = self.string[:start] + self.string[stop:]
-        if self.document is not None and not undo:
+        if not undo:
             self.document._update(Drop(self, start, text))
         return text
 
@@ -129,7 +131,7 @@ class Symbol(Node):
         index = max(0, min(len(self), index))
         assert isinstance(string, (str, unicode))
         self.string = self.string[:index] + string + self.string[index:]
-        if self.document is not None and not undo:
+        if not undo:
             self.document._update(Put(self, index, string))
 
     def traverse(self):
@@ -194,7 +196,7 @@ class Literal(Node):
             for node in contents:
                 node.parent = None
                 node_remove(self.document, node)
-        if self.document is not None and not undo:
+        if not undo:
             self.document._update(Drop(self, start, contents))
             if self.islist():
                 contents = [node.copy() for node in contents]
@@ -219,7 +221,7 @@ class Literal(Node):
                 node_insert(self.document, node)
         else:
             assert isinstance(contents, (str, unicode))
-        if self.document is not None and not undo:
+        if not undo:
             self.document._update(Put(self, index, contents))
 
     def traverse(self):
@@ -239,8 +241,7 @@ class Literal(Node):
         return isinstance(self.contents, list)
 
 def node_insert(document, node):
-    if document is None:
-        return
+    assert document is not None
     assert node.document is None
     node.document = document
     if node.ident == "" or node.ident in document.nodes:
