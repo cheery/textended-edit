@@ -25,7 +25,7 @@ class Workspace(object):
             self.documents[path] = document = dom.Document(body, path)
             return document
         elif create:
-            body = dom.Document("", u"", [])
+            body = dom.Literal("", u"", [])
             self.documents[path] = document = dom.Document(body, path)
             return document
         else:
