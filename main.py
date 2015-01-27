@@ -22,7 +22,7 @@ from OpenGL.GL import shaders
 from ctypes import c_void_p
 from collections import defaultdict
 import dom
-from dom import Position, Selection
+from selection import Position, Selection
 from ctypes import c_int, byref, c_char, POINTER, c_void_p
 from sdl2 import *
 from workspace import Workspace
@@ -43,11 +43,10 @@ default_env = {
 }
 
 class Editor(object):
-    def __init__(self, images, document, selection, x=0, y=0, width=200, height=200):
+    def __init__(self, images, document, x=0, y=0, width=200, height=200):
         self.images = images
         self.compositor = Compositor(images, debug_layout)
         self.document = document
-        self.selection = selection
         self.layers = []
         self.x = x
         self.y = y
@@ -85,8 +84,8 @@ class Editor(object):
         elif obj is not None:
             return obj.rect
 
-    def create_sub_editor(self, document, selection):
-        subeditor = Editor(self.images, document, selection)
+    def create_sub_editor(self, document):
+        subeditor = Editor(self.images, document)
         subeditor.width = self.width
         subeditor.height = self.height
         self.children.append(subeditor)
@@ -139,13 +138,12 @@ def create_editor(images):
         document = workspace.get(sys.argv[1])
     else:
         document = workspace.new()
-    selection = Selection.bottom(document.body)
-    editor = Editor(images, document, selection)
+    editor = Editor(images, document)
     for path in sys.argv[2:]:
         editor.create_layer(workspace.get(path, create=False))
     return editor
 editor = create_editor(images)
-focus = editor
+selection = Selection(editor, Position.bottom(editor.document.body))
 editor.width = width
 editor.height = height
 
@@ -301,14 +299,14 @@ def update_cursor(t):
     flatlayer.clear()
     x, y = cursor
 
-    document = focus.document
+    document = selection.document
     cursors = defaultdict(list)
-    subj = focus.selection.subj
-    start = focus.selection.start
-    stop = focus.selection.stop
-    if subj not in focus.mappings:
+    subj = selection.subj
+    start = selection.start
+    stop = selection.stop
+    if subj not in selection.visual.mappings:
         return
-    mapping = focus.mappings[subj]
+    mapping = selection.visual.mappings[subj]
     if mapping.tokens is None:
         return
 
@@ -323,16 +321,16 @@ def update_cursor(t):
     if subj.islist():
         if start == stop:
             if start < len(subj):
-                submapping = focus.mappings[subj[start]]
+                submapping = selection.visual.mappings[subj[start]]
                 x0, y0, x1, y1 = submapping.tokens[0].quad
                 return flatlayer.quad((x0-1, y0, x0, y1), color)
             elif len(subj) > 0:
-                submapping = focus.mappings[subj[-1]]
+                submapping = selection.visual.mappings[subj[-1]]
                 x0, y0, x1, y1 = submapping.tokens[-1].quad
                 return flatlayer.quad((x1-1, y0, x1, y1), color)
         else:
             for subnode in subj[start:stop]:
-                submapping = focus.mappings[subnode]
+                submapping = selection.visual.mappings[subnode]
                 for token in submapping.tokens:
                     cursors[token.parent].append(token.quad)
 
@@ -365,36 +363,36 @@ def quad_enclosure(quads):
         y1 = max(y1, y3)
     return x0, y0, x1, y1
 
-def hierarchy_of(node):
-    result = [node]
-    while node.parent is not None:
-        result.append(node.parent)
-        node = node.parent
-    result.reverse()
-    return result
-
-def simplify_selection(headpos, tailpos):
-    if headpos.subj is tailpos.subj:
-        return Selection(headpos.subj, headpos.index, tailpos.index)
-    hh = hierarchy_of(headpos.subj)
-    th = hierarchy_of(tailpos.subj)
-    i = 0
-    for c_a, c_b in zip(hh, th):
-        if c_a is c_b:
-            i += 1
-        else:
-            break
-    assert i > 0
-    subj = hh[i-1]
-    head_inc = i < len(hh)
-    head = subj.index(hh[i]) if head_inc else headpos.index
-    tail_inc = i < len(th)
-    tail = subj.index(th[i]) if tail_inc else tailpos.index
-    if tail <= head:
-        head += head_inc
-    else:
-        tail += tail_inc
-    return Selection(subj, head, tail)
+#def hierarchy_of(node):
+#    result = [node]
+#    while node.parent is not None:
+#        result.append(node.parent)
+#        node = node.parent
+#    result.reverse()
+#    return result
+#
+#def simplify_selection(headpos, tailpos):
+#    if headpos.subj is tailpos.subj:
+#        return dom.OldSelection(headpos.subj, headpos.index, tailpos.index)
+#    hh = hierarchy_of(headpos.subj)
+#    th = hierarchy_of(tailpos.subj)
+#    i = 0
+#    for c_a, c_b in zip(hh, th):
+#        if c_a is c_b:
+#            i += 1
+#        else:
+#            break
+#    assert i > 0
+#    subj = hh[i-1]
+#    head_inc = i < len(hh)
+#    head = subj.index(hh[i]) if head_inc else headpos.index
+#    tail_inc = i < len(th)
+#    tail = subj.index(th[i]) if tail_inc else tailpos.index
+#    if tail <= head:
+#        head += head_inc
+#    else:
+#        tail += tail_inc
+#    return dom.OldSelection(subj, head, tail)
 
 cursor_tail = None
 
@@ -429,7 +427,10 @@ def paint(t):
     glClear(GL_COLOR_BUFFER_BIT)
 
     update_document(t)
-    update_cursor(t)
+    try:
+        update_cursor(t)
+    except:
+        traceback.print_exc()
 
     scale = 1.0
     editor.compositor.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
@@ -510,25 +511,17 @@ while live:
         elif event.type == SDL_MOUSEMOTION:
             cursor[0] = event.motion.x
             cursor[1] = event.motion.y
-            if event.motion.state == 0:
-                cursor_tail = None
-            if cursor_tail is not None:
-                position = pick_nearest(focus, cursor[0], cursor[1])
+            if event.motion.state != 0:
+                position = pick_nearest(selection.visual, cursor[0], cursor[1])
                 if position is not None:
-                    focus.headpos = position
-                    focus.selection = simplify_selection(focus.headpos, focus.tailpos)
+                    selection.set(position, selection.tail)
         elif event.type == SDL_MOUSEBUTTONDOWN:
             cursor[0] = event.motion.x
             cursor[1] = event.motion.y
-            sel = focus.selection
-            position = pick_nearest(focus, cursor[0], cursor[1])
+            sel = selection
+            position = pick_nearest(selection.visual, cursor[0], cursor[1])
             if position is not None:
-                sel.subj = position.subj
-                sel.head = sel.tail = position.index
-                sel.x_anchor = None
-                cursor_tail = position
-                focus.headpos = focus.tailpos = cursor_tail
-                focus.selection = simplify_selection(focus.headpos, focus.tailpos)
+                selection.set(position)
         elif event.type == SDL_MOUSEBUTTONUP:
             pass
         elif event.type == SDL_MOUSEWHEEL:
@@ -540,7 +533,7 @@ while live:
     update = False
     for key, mod, text in keyboard:
         update = True
-        key_event = keybindings.KeyEvent(mode, workspace, focus, key, mod, text)
+        key_event = keybindings.KeyEvent(mode, workspace, selection, key, mod, text)
         valid = [binding for binding in mode.bindings if binding(key_event)]
         try:
             if len(valid) > 1:
@@ -555,9 +548,9 @@ while live:
             mode = key_event.mode
         elif mode.transition is not None:
             mode = mode.transition
-        if key_event.editor is not focus:
-            focus = key_event.editor
+        if key_event.selection is not selection:
+            selection = key_event.selection
     if update:
-        focus.update_hook(focus)
+        selection.visual.update_hook(selection.visual)
     paint(time.time())
     SDL_GL_SwapWindow(window)
