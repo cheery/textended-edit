@@ -67,7 +67,11 @@ def print_statement(env, exprs):
 
 @semantic(stmt, Group('import', [], alias))
 def import_statement(env, aliases):
-    return ast.Import(aliases, lineno=0, col_offset=0)
+    return env.new_node(ast.Import, aliases)
+
+@semantic(stmt, Group('from-import', [Symbol()], alias))
+def from_import_statement(env, name, aliases):
+    return env.new_node(ast.ImportFrom, as_python_sym(name), aliases, 0)
 
 @semantic(alias, Symbol())
 def symbol_alias(env, name):

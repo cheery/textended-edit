@@ -85,6 +85,16 @@ def layout_import(env, aliases):
         tokens.extend(alias)
     yield hpack(tokens)
 
+@semantic(stmt, Group('from-import', [Symbol()], alias))
+def layout_import(env, name, aliases):
+    tokens = env['font']('from ', env['fontsize'], color=env['blue'])
+    tokens += name
+    tokens += env['font'](' import', env['fontsize'], color=env['blue'])
+    for alias in aliases:
+        tokens.extend(env['font'](" ", env['fontsize']))
+        tokens.extend(alias)
+    yield hpack(tokens)
+
 @semantic(alias, Symbol())
 def layout_alias_symbol(env, node):
     return env['font'](node, env['fontsize'])
