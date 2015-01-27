@@ -3,25 +3,88 @@ import tempfile, os
 from random import randint
 
 class Document(object):
-    def __init__(self, body, filename=None):
-        self.body = body
+    def __init__(self, body, name=None):
         self.nodes = {}
-        self.filename = filename
-        self.ver = 1
-        node_insert(self, body)
+        self.body = node_insert(self, body)
+        self.name = name
+
+        self.history = []
+
+    @property
+    def ver(self):
+        return len(self.history) + 1
+
+    def _update(self, change):
+        self.history.append(change)
+        print self.ver 
+
+    def undo(self):
+        if len(self.history) == 0:
+            return False
+        change = self.history.pop(-1)
+        change.undo()
+        return True
+
+class Drop(object):
+    def __init__(self, subj, index, dropped):
+        self.subj = subj
+        self.index = index
+        self.dropped = dropped
+
+    def undo(self):
+        self.subj.put(self.index, self.dropped, undo=True)
+
+class Put(object):
+    def __init__(self, subj, index, inserted):
+        self.subj = subj
+        self.index = index
+        self.inserted = inserted
+
+    def undo(self):
+        results = self.subj.drop(self.index, self.index + len(self.inserted), undo=True)
+        assert len(results) == len(self.inserted)
+        assert all(a is b for a, b in zip(self.inserted, results))
+
+class Relabel(object):
+    def __init__(self, subj, old_label, new_label):
+        self.subj = subj
+        self.old_label = old_label
+        self.new_label = new_label
+
+    def undo(self):
+        self.subj._label = self.old_label
+
+class Rollback(object):
+    def __init__(self, head, tail):
+        self.head = head
+        self.tail = tail
+
+class Commit(object):
+    pass
 
 class Node(object):
     document = None
     parent = None
 
+    def issymbol(self):
+        return False
+
+    def isbinary(self):
+        return False
+
+    def isstring(self):
+        return False
+
+    def islist(self):
+        return False
+
 class Symbol(Node):
-    type = 'symbol'
     def __init__(self, string, ident=''):
         self.string = string
         self.ident = ident
 
     def copy(self):
-        return self.__class__(self.string)
+        return self.__class__(self.string, self.ident)
 
     def __getitem__(self, index):
         return self.string[index]
@@ -29,56 +92,68 @@ class Symbol(Node):
     def __len__(self):
         return len(self.string)
 
-    def drop(self, start, stop):
+    def drop(self, start, stop, undo=False):
+        start = max(0, min(len(self), start))
+        stop = max(0, min(len(self), stop))
         text = self.string[start:stop]
         self.string = self.string[:start] + self.string[stop:]
-        if self.document is not None:
-            self.document.ver += 1
+        if self.document is not None and not undo:
+            self.document._update(Drop(self, start, text))
         return text
 
-    def yank(self, start, stop):
+    def yank(self, start, stop, undo=False):
         return self.string[start:stop]
 
-    def put(self, index, string):
+    def put(self, index, string, undo=False):
+        index = max(0, min(len(self), index))
         assert isinstance(string, (str, unicode))
         self.string = self.string[:index] + string + self.string[index:]
-        if self.document is not None:
-            self.document.ver += 1
+        if self.document is not None and not undo:
+            self.document._update(Put(self, index, string))
 
     def traverse(self):
         yield self
 
+    def issymbol(self):
+        return True
+
 class Literal(Node):
-    def __init__(self, ident, label, contents):
-        self.contents = contents
+    def __init__(self, label, contents, ident=""):
         self.ident = ident
-        self.label = label
-        if isinstance(contents, str):
-            self.type = 'binary'
-        elif isinstance(contents, unicode):
-            self.type = 'string'
+        self._label = label
+        assert isinstance(ident, str), repr(ident)
+        assert isinstance(label, unicode), repr(label)
+        if isinstance(contents, (str, unicode)):
+            self.contents = contents
         else:
-            self.type = 'list'
+            self.contents = []
             for node in contents:
                 assert isinstance(node, Node)
                 assert node.parent is None
                 node.parent = self
+                self.contents.append(node)
     
     def __repr__(self):
-        return "Literal({0.ident!r}, {0.label!r}, {0.type})".format(self)
+        type = 'list'
+        if isinstance(self.contents, str):
+            type = 'binary'
+        if isinstance(self.contents, unicode):
+            type = 'string'
+        return "Literal({0.label!r}, {1}, {0.ident!r})".format(self, type)
 
     @property
     def label(self):
         return self._label
 
     @label.setter
-    def label(self, label):
-        self._label = label
+    def label(self, new_label):
+        old_label = self._label
+        self._label = new_label
         if self.document is not None:
-            self.document.ver += 1
+            self.document._update(Relabel(self, old_label, new_label))
     
     def copy(self):
-        return self.__class__(self.ident, self.label, self.yank(0, len(self)))
+        return self.__class__(self.label, self.yank(0, len(self)), self.ident)
 
     def __getitem__(self, index):
         return self.contents[index]
@@ -89,15 +164,19 @@ class Literal(Node):
     def __len__(self):
         return len(self.contents)
 
-    def drop(self, start, stop):
+    def drop(self, start, stop, undo=False):
+        start = max(0, min(len(self), start))
+        stop = max(0, min(len(self), stop))
         contents = self.contents[start:stop]
         self.contents = self.contents[:start] + self.contents[stop:]
         if isinstance(contents, list):
             for node in contents:
                 node.parent = None
                 node_remove(self.document, node)
-        if self.document is not None:
-            self.document.ver += 1
+        if self.document is not None and not undo:
+            self.document._update(Drop(self, start, contents))
+            if self.islist():
+                contents = [node.copy() for node in contents]
         return contents
 
     def yank(self, start, stop):
@@ -106,11 +185,12 @@ class Literal(Node):
             contents = [node.copy() for node in contents]
         return contents
 
-    def put(self, index, contents):
-        if self.type == 'binary' and isinstance(contents, unicode):
+    def put(self, index, contents, undo=False):
+        index = max(0, min(len(self), index))
+        if self.isbinary() and isinstance(contents, unicode):
             contents = contents.encode('utf-8')
         self.contents = self.contents[:index] + contents + self.contents[index:]
-        if self.type == 'list':
+        if self.islist():
             for node in contents:
                 assert isinstance(node, Node)
                 assert node.parent is None
@@ -118,8 +198,8 @@ class Literal(Node):
                 node_insert(self.document, node)
         else:
             assert isinstance(contents, (str, unicode))
-        if self.document is not None:
-            self.document.ver += 1
+        if self.document is not None and not undo:
+            self.document._update(Put(self, index, contents))
 
     def traverse(self):
         yield self
@@ -127,6 +207,15 @@ class Literal(Node):
             for node in self:
                 for node in node.traverse():
                     yield node
+
+    def isbinary(self):
+        return isinstance(self.contents, str)
+
+    def isstring(self):
+        return isinstance(self.contents, unicode)
+
+    def islist(self):
+        return isinstance(self.contents, list)
 
 def node_insert(document, node):
     if document is None:
@@ -139,9 +228,10 @@ def node_insert(document, node):
             ident += chr(randint(0, 255))
         node.ident = ident
     document.nodes[node.ident] = node
-    if node.type == 'list':
+    if node.islist():
         for subnode in node:
             node_insert(document, subnode)
+    return node
 
 def node_remove(document, node):
     assert node.document is document
@@ -149,7 +239,7 @@ def node_remove(document, node):
     if document is None:
         return
     del document.nodes[node.ident]
-    if node.type == 'list':
+    if node.islist():
         for subnode in node:
             node_remove(document, subnode)
 
@@ -163,7 +253,7 @@ def transform_dec(label, contents, ident):
     if contents is None:
         return Symbol(label, ident)
     else:
-        return Literal(ident, label, contents)
+        return Literal(label, contents, ident)
 
 def load(path):
     with open(path, 'rb') as fd:
@@ -206,13 +296,13 @@ class Selection(object):
 
     @classmethod
     def top(cls, node):
-        while node.type == 'list' and len(node) > 0:
+        while node.islist() and len(node) > 0:
             node = node[0]
         return cls(node, 0, 0)
 
     @classmethod
     def bottom(cls, node):
-        while node.type == 'list' and len(node) > 0:
+        while node.islist() and len(node) > 0:
             node = node[len(node) - 1]
         return cls(node, len(node), len(node))
 

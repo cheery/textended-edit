@@ -12,7 +12,7 @@ class Mapping(object):
         return len(self.subj)
 
     def __getitem__(self, index):
-        assert self.subj.type == 'list'
+        assert self.subj.islist()
         return Mapping(self.mappings, self.subj[index], index)
 
     def update(self, func, *args):

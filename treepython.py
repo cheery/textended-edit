@@ -161,15 +161,15 @@ def attr_expression(env, subj, name):
     return env.new_node(ast.Attribute, subj, as_python_sym(name), ast.Store())
 
 def put_error_string(errors, node, message):
-    if node.document.filename is not None:
-        error = dom.Literal("", u"reference", [
-            dom.Literal("", u"", node.ident),
-            dom.Literal("", u"", unicode(node.document.filename)),
-            dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])])
+    if node.document.name is not None:
+        error = dom.Literal(u"reference", [
+            dom.Literal(u"", node.ident),
+            dom.Literal(u"", unicode(node.document.name)),
+            dom.Literal(u"", [dom.Literal(u"", unicode(message))])])
     else:
-        error = dom.Literal("", u"reference", [
-            dom.Literal("", u"", node.ident),
-            dom.Literal("", u"", [dom.Literal("", u"", unicode(message))])])
+        error = dom.Literal(u"reference", [
+            dom.Literal(u"", node.ident),
+            dom.Literal(u"", [dom.Literal(u"", unicode(message))])])
     errors.append(error)
 
 class Env(object):
@@ -184,12 +184,12 @@ class Env(object):
         return node
 
 class SemanticErrors(Exception):
-    def __init__(self, document, filename):
+    def __init__(self, document, name):
         self.document = document
-        self.filename = filename
+        self.name = name
 
     def __str__(self):
-        return "{}".format(self.filename)
+        return "{}".format(self.name)
 
 local_environ = dict()
 
@@ -199,7 +199,7 @@ def evaluate_document(document):
         exec compile(ast, "t+", 'exec') in local_environ
 
 def file_as_ast(path):
-    document = dom.Document(dom.Literal("", u"", dom.load(path)), path)
+    document = dom.Document(dom.Literal(u"", dom.load(path)), path)
     return document_as_ast(document)
 
 def document_as_ast(document):
@@ -223,7 +223,7 @@ def document_as_ast(document):
             except TranslationError as error:
                 put_error_string(env.errors, error.node, error.string)
     if env.errors:
-        raise SemanticErrors(dom.Document(dom.Literal("", u"", env.errors)), document.filename)
+        raise SemanticErrors(dom.Document(dom.Literal(u"", env.errors)), document.name)
     return ast.Module(statements)
 
 def import_file_to_module(module_name, path):
@@ -319,24 +319,24 @@ if __name__=='__main__':
             sys.stderr.write("Pipeline stderr to a file or invoke from an editor to get structured file.\n")
         else:
             errors = []
-            errors.append(dom.Literal('', u'language', u"python_traceback"))
+            errors.append(dom.Literal(u'language', u"python_traceback"))
             exc_type, exc_value, exc_traceback = sys.exc_info()
             for filename, lineno, location, line in traceback.extract_tb(exc_traceback):
                 if line is not None:
-                    errors.append(dom.Literal('', u'tracerecord-text', [
-                        dom.Literal('', u'', filename.decode('utf-8')),
+                    errors.append(dom.Literal(u'tracerecord-text', [
+                        dom.Literal(u'', filename.decode('utf-8')),
                         dom.Symbol(unicode(lineno)),
-                        dom.Literal('', u'', location.decode('utf-8')),
-                        dom.Literal('', u'', line.decode('utf-8')),
+                        dom.Literal(u'', location.decode('utf-8')),
+                        dom.Literal(u'', line.decode('utf-8')),
                     ]))
                 else:
-                    errors.append(dom.Literal('', u'tracerecord', [
-                        dom.Literal('', u'', filename.decode('utf-8')),
-                        dom.Literal('', u'', lineno_to_ident(lineno)),
+                    errors.append(dom.Literal(u'tracerecord', [
+                        dom.Literal(u'', filename.decode('utf-8')),
+                        dom.Literal(u'', lineno_to_ident(lineno)),
                     ]))
-            errors.append(dom.Literal('', u'tracemessage', [
-                dom.Literal('', u'', exc_type.__name__.decode('utf-8')),
-                dom.Literal('', u'', str(exc_value).decode('utf-8')),
+            errors.append(dom.Literal(u'tracemessage', [
+                dom.Literal(u'', exc_type.__name__.decode('utf-8')),
+                dom.Literal(u'', str(exc_value).decode('utf-8')),
             ]))
-            document = dom.Document(dom.Literal('', u'', errors))
+            document = dom.Document(dom.Literal(u'', errors))
             dom.dump(sys.stderr, document)

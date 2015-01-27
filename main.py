@@ -177,7 +177,7 @@ extensions_table = {}
 
 def configure_mapping(editor, mapping, body):
     for directive in body:
-        if directive.type == 'string' and directive.label == 'language':
+        if directive.isstring() and directive.label == 'language':
             name = directive[:]
             return get_extension_layout(editor, mapping, name)
     return False
@@ -281,13 +281,13 @@ def update_characters(t):
 
 def collect_bridges(layer):
     for node in layer.document.body:
-        if node.type == 'list' and node.label == 'reference':
+        if node.islist() and node.label == 'reference':
             reference = None
             target = None
             for subnode in node:
-                if subnode.type == 'binary':
+                if subnode.isbinary():
                     reference = subnode[:]
-                elif subnode.type == 'list':
+                elif subnode.islist():
                     target = subnode
             yield Bridge(layer, reference, target)
 
@@ -313,14 +313,14 @@ def update_cursor(t):
         return
 
     color = (0, 1.0, 1.0, 0.5)
-    if subj.type == 'list':
+    if subj.islist():
         color = (0, 1.0, 0.0, 0.5)
-    if subj.type == 'string':
+    if subj.isstring():
         color = (1.0, 1.0, 0.0, 0.5)
-    if subj.type == 'binary':
+    if subj.isbinary():
         color = (0.5, 0.0, 1.0, 0.5)
 
-    if subj.type == 'list':
+    if subj.islist():
         if start == stop:
             if start < len(subj):
                 submapping = focus.mappings[subj[start]]

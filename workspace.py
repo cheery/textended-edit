@@ -7,25 +7,25 @@ class Workspace(object):
         self.unbound = []
 
     def new(self):
-        body = dom.Literal("", u"", [])
+        body = dom.Literal(u"", [])
         document = dom.Document(body, None)
         self.unbound.append(document)
         return document
 
     def attach(self, document, name):
         self.unbound.append(document)
-        document.filename = name
+        document.name = name
         return document
 
     def get(self, path, create=True):
         if path in self.documents:
             return self.documents[path]
         elif os.path.exists(path):
-            body = dom.Literal("", u"", dom.load(path))
+            body = dom.Literal(u"", dom.load(path))
             self.documents[path] = document = dom.Document(body, path)
             return document
         elif create:
-            body = dom.Literal("", u"", [])
+            body = dom.Literal(u"", [])
             self.documents[path] = document = dom.Document(body, path)
             return document
         else:
