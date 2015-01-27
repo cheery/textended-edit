@@ -36,6 +36,7 @@ class LetterBox(Box):
         self.texcoords = texcoords
         self.padding = padding
         self.color = color
+        assert isinstance(color, (tuple, list)) and len(color) == 4, repr(color)
 
 class ImageBox(Box):
     def __init__(self, width, height, depth, source, color):

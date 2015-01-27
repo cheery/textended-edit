@@ -48,7 +48,7 @@ def build(mapping, env):
 
 def plaintext(env, text, size=None, color=None):
     size = env['fontsize'] if size is None else size
-    colr = env['white'] if color is None else color
+    color = env['white'] if color is None else color
     return env['font'](text, size, color=color)
 
 def lazy_lisp_break(env, tokens, max_width):
