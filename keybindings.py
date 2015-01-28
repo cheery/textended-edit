@@ -50,22 +50,15 @@ class Mode(object):
 def with_transaction(fn):
     def _impl_(event):
         selection = event.selection
-        head = Position(selection.subj, selection.head)
-        tail = Position(selection.subj, selection.tail)
-        transaction = event.selection.document.transaction(head, tail)
+        transaction = event.selection.document.transaction(selection.head, selection.tail)
         try:
             fn(event)
         except Exception:
             transaction.rollback()
-            selection.subj = transaction.head.subj
-            selection.head = transaction.head.index
-            selection.tail = transaction.tail.index
+            selection.set(transaction.head, transaction.tail)
             raise
         else:
-            selection = event.selection
-            head = Position(selection.subj, selection.head)
-            tail = Position(selection.subj, selection.tail)
-            transaction.commit(head, tail)
+            transaction.commit(selection.head, selection.tail)
     return _impl_
 
 insert = Mode('insert')
@@ -146,264 +139,254 @@ def insert_new_node(event, mk_subj):
     selection.put([new_subj])
     selection.set(Position(new_subj, 0))
 
-#def slit(sel):
-#    if sel.subj.islist():
-#        return
-#    if sel.subj.parent is None:
-#        return
-#    parent = sel.subj.parent
-#    pos = parent.index(sel.subj)
-#    if sel.subj_head != sel.tail:
-#        sel.drop()
-#    elif sel.subj_head == 0:
-#        sel.subj = parent
-#        sel.subj_head = sel.tail = pos
-#    elif sel.subj_head == len(sel.subj):
-#        sel.subj = parent
-#        sel.subj_head = sel.tail = pos + 1
-#    else:
-#        contents = sel.subj.drop(sel.subj_head, len(sel.subj))
-#        issymbol = sel.subj.issymbol()
-#        sel.subj = parent
-#        sel.subj_head = sel.tail = pos + 1
-#        if issymbol:
-#            sel.subj.put(sel.subj_head, [dom.Symbol(contents)])
-#        else:
-#            sel.subj.put(sel.subj_head, [dom.Literal(u"", contents)])
-#
-#@insert.text('(')
-#def insert_fall_left(event):
-#    fall_before(event.selection)
-#
-#def fall_before(sel):
-#    issymbol = sel.subj.issymbol()
-#    parent = sel.subj.parent
-#    if parent is None:
-#        return
-#    pos = parent.index(sel.subj)
-#    sel.subj = parent
-#    sel.head = sel.tail = pos
-#    if issymbol:
-#        fall_before(sel)
-#
-#@insert.text(')')
-#def insert_fall_right(event):
-#    fall_after(event.selection)
-#
-#def fall_after(sel):
-#    issymbol = sel.subj.issymbol()
-#    parent = sel.subj.parent
-#    if parent is None:
-#        return
-#    pos = parent.index(sel.subj) + 1
-#    sel.subj = parent
-#    sel.head = sel.tail = pos
-#    if issymbol:
-#        fall_after(sel)
-#
-#@insert.key('left')
-#def insert_left(event):
-#    sel = event.selection
-#    if sel.head > 0:
-#        if sel.subj.islist():
-#            sel = dom.OldSelection.bottom(sel.subj[sel.head-1])
-#        else:
-#            sel.head -= 1
-#            sel.tail = sel.head
-#            sel.x_anchor = None
-#    else:
-#        sel = fall_left_leaf(sel.subj)
-#    event.selection = sel
-#
-#def fall_left_leaf(node):
-#    if node.parent is None:
-#        return dom.OldSelection.top(node)
-#    index = node.parent.index(node)
-#    if index > 0:
-#        return dom.OldSelection.bottom(node.parent[index - 1])
-#    else:
-#        return fall_left_leaf(node.parent)
-#
-#@insert.key('right')
-#def insert_right(event):
-#    sel = event.selection
-#    if sel.head < len(sel.subj):
-#        if sel.subj.islist():
-#            sel = dom.OldSelection.top(sel.subj[sel.head])
-#        else:
-#            sel.head += 1
-#            sel.tail = sel.head
-#            sel.x_anchor = None
-#    else:
-#        sel = fall_right_leaf(sel.subj)
-#    event.selection = sel
-#
-#def fall_right_leaf(node):
-#    if node.parent is None:
-#        return dom.OldSelection.bottom(node)
-#    index = node.parent.index(node) + 1
-#    if index < len(node.parent):
-#        return dom.OldSelection.top(node.parent[index])
-#    else:
-#        return fall_right_leaf(node.parent)
-#
-#@insert.key('z', 'ctrl')
-#def undo_document(event):
-#    selection = event.selection
-#    transaction = event.selection.document.undo()
-#    if transaction is not None:
-#        selection.subj = transaction.head.subj
-#        selection.head = transaction.head.index
-#        selection.tail = transaction.tail.index
-#
-#@insert.key('q', 'ctrl')
-#def save_document(event):
-#    sys.exit(0)
-#
-#@insert.key('s', 'ctrl')
-#def save_document(event):
-#    document = event.selection.document
-#    dom.save(document.name, document.body)
-#
-#@insert.key('x', 'ctrl')
-#@with_transaction
-#def cut_document(event):
-#    selection = event.selection
-#    document = event.selection.document
-#    document.copybuf = selection.drop()
-#
-#@insert.key('c', 'ctrl')
-#def copy_document(event):
-#    selection = event.selection
-#    document = event.selection.document
-#    document.copybuf = selection.yank()
-#
-#@insert.key('v', 'ctrl')
-#@with_transaction
-#def paste_document(event):
-#    sel = event.selection
-#    document = event.selection.document
-#    if document.copybuf is not None:
-#        if sel.subj.islist() and isinstance(document.copybuf, list):
-#            sel.put(document.copybuf)
-#        elif sel.subj.issymbol() and isinstance(document.copybuf, unicode):
-#            sel.put(document.copybuf)
-#        elif sel.subj.isstring() and isinstance(document.copybuf, unicode):
-#            sel.put(document.copybuf)
-#        elif sel.subj.isbinary() and isinstance(document.copybuf, str):
-#            sel.put(document.copybuf)
-#
-#@insert.key('f5')
-#def evaluate_document(event):
-#    try:
-#        treepython.evaluate_document(event.selection.document)
-#    except treepython.SemanticErrors as ser:
-#        event.workspace.attach(ser.document, '<evaluation error>')
-#        event.selection.visual.create_layer(ser.document)
-#
-#@insert.key('up')
-#def insert_up(event):
-#    navigate(event.selection.visual, event.selection, hcarets_above)
-#
-#@insert.key('down')
-#def insert_down(event):
-#    navigate(event.selection.visual, event.selection, hcarets_below)
-#
-#def navigate(editor, sel, hcarets_fn):
-#    caret = find_caret(editor, sel.subj, sel.head)
-#    if caret is None:
-#        return
-#    if sel.x_anchor is None:
-#        sel.x_anchor = caret.quad[0]
-#        if caret.index + 1 == sel.head:
-#            sel.x_anchor = caret.quad[2]
-#    def nearest(node):
-#        x0,y0,x1,y1 = node.quad
-#        return abs(x0 - sel.x_anchor)
-#    try:
-#        node = min(hcarets_fn(caret), key=nearest)
-#    except ValueError as v:
-#        return
-#    else:
-#        sel.subj = node.subj
-#        sel.head = sel.tail = node.index
-#
-#def find_caret(editor, subj, index):
-#    for frame in editor.rootbox.traverse():
-#        if frame.subj == subj and (frame.index == index or frame.index + 1 == index):
-#            return frame
-#
-#def hcarets_above(node):
-#    parent = node.parent
-#    success = False
-#    while parent is not None:
-#        if isinstance(parent, boxmodel.VBox):
-#            index = parent.index(node)
-#            for item in reversed(parent[:index]):
-#                for subnode in item.traverse():
-#                    if is_hcaret(subnode):
-#                        yield subnode
-#                        success = True
-#                if success:
-#                    return
-#        node   = parent
-#        parent = node.parent
-#
-#def hcarets_below(node):
-#    parent = node.parent
-#    success = False
-#    while parent is not None:
-#        if isinstance(parent, boxmodel.VBox):
-#            index = parent.index(node)
-#            for item in parent[index+1:]:
-#                for subnode in item.traverse():
-#                    if is_hcaret(subnode):
-#                        yield subnode
-#                        success = True
-#                if success:
-#                    return
-#        node   = parent
-#        parent = node.parent
-#
-#def is_hcaret(node):
-#    return isinstance(node.subj, dom.Node)
-#
-#@node_insert.key('left alt')
-#def node_insert_editor(event):
-#    print 'insert editor'
-#    sel = event.selection
-#    if sel.subj.issymbol():
-#        subj = sel.subj.parent
-#    else:
-#        subj = sel.subj
-#    if subj is None:
-#        return
-#
-#    body = dom.Symbol(subj.label)
-#    document = dom.Document(body)
-#    editor = event.selection.visual.create_sub_editor(document)
-#    editor.color = (0, 0, 0, 0.9)
-#
-#    event.selection.visual = editor
-#    sel.set(Position.bottom(body))
-#
-#    def position_hook(editor):
-#        editor.width = editor.parent.width
-#        editor.height = editor.inner_height
-#        editor.x = 0
-#        editor.y = editor.parent.height - editor.height
-#    def hook(editor):
-#        subj.label = editor.document.body[:]
-#    def close_hook(editor):
-#        sel.visual = editor.parent
-#        subj.label = editor.document.body[:]
-#    editor.position_hook = position_hook
-#    editor.close_hook  = close_hook
-#    editor.update_hook = hook
-#
-#@insert.key('escape')
-#def insert_escape(event):
-#    visual = event.selection.visual
-#    if visual.parent is not None:
-#        event.selection.visual = visual.parent
-#        visual.close()
+def slit(selection):
+    head = selection.head
+    if head.subj.islist():
+        return
+    if head.subj.parent is None:
+        return
+    parent = head.subj.parent
+    pos = parent.index(head.subj)
+    if head.index == 0:
+        head.subj = parent
+        head.index = pos
+    elif head.index == len(head.subj):
+        head.subj = parent
+        head.index = pos + 1
+    else:
+        contents = head.subj.drop(head.index, len(head.subj))
+        issymbol = head.subj.issymbol()
+        head.subj = parent
+        head.index = pos + 1
+        if issymbol:
+            head.subj.put(head.index, [dom.Symbol(contents)])
+        else:
+            head.subj.put(head.index, [dom.Literal(u"", contents)])
+    selection.set(head, head)
+
+@insert.text('(')
+def insert_fall_left(event):
+    fall_before(event.selection)
+
+def fall_before(selection):
+    issymbol = selection.subj.issymbol()
+    parent = selection.subj.parent
+    if parent is None:
+        return
+    pos = parent.index(selection.subj)
+    selection.set(Position(parent, pos))
+    if issymbol:
+        fall_before(selection)
+
+@insert.text(')')
+def insert_fall_right(event):
+    fall_after(event.selection)
+
+def fall_after(selection):
+    issymbol = selection.subj.issymbol()
+    parent = selection.subj.parent
+    if parent is None:
+        return
+    pos = parent.index(selection.subj) + 1
+    selection.set(Position(parent, pos))
+    if issymbol:
+        fall_after(selection)
+
+@insert.key('z', 'ctrl')
+def undo_document(event):
+    selection = event.selection
+    transaction = event.selection.document.undo()
+    if transaction is not None:
+        selection.set(transaction.head, transaction.tail)
+
+@insert.key('q', 'ctrl')
+def save_document(event):
+    sys.exit(0)
+
+@insert.key('s', 'ctrl')
+def save_document(event):
+    document = event.selection.document
+    dom.save(document.name, document.body)
+
+@insert.key('x', 'ctrl')
+@with_transaction
+def cut_document(event):
+    event.workspace.copybuf = event.selection.drop()
+
+@insert.key('c', 'ctrl')
+def copy_document(event):
+    event.workspace.copybuf = event.selection.yank()
+
+@insert.key('v', 'ctrl')
+@with_transaction
+def paste_document(event):
+    sel = event.selection
+    copybuf = event.workspace.copybuf
+    document = event.selection.document
+    if copybuf is not None:
+        if sel.subj.islist() and isinstance(copybuf, list):
+            sel.put([node.copy() for node in copybuf])
+        elif sel.subj.issymbol() and isinstance(copybuf, unicode):
+            sel.put(copybuf)
+        elif sel.subj.isstring() and isinstance(copybuf, unicode):
+            sel.put(copybuf)
+        elif sel.subj.isbinary() and isinstance(copybuf, str):
+            sel.put(copybuf)
+
+@insert.key('f5')
+def evaluate_document(event):
+    try:
+        treepython.evaluate_document(event.selection.document)
+    except treepython.SemanticErrors as ser:
+        event.workspace.attach(ser.document, '<evaluation error>')
+        event.selection.visual.create_layer(ser.document)
+
+@insert.key('left')
+def insert_left(event):
+    head = event.selection.head
+    if head.index > 0:
+        if head.subj.islist():
+            head = Position.bottom(head.subj[head.index-1])
+        else:
+            head.index -= 1
+    else:
+        head = fall_left_leaf(head.subj)
+    event.selection.set(head, head)
+
+def fall_left_leaf(node):
+    if node.parent is None:
+        return Position.top(node)
+    index = node.parent.index(node)
+    if index > 0:
+        return Position.bottom(node.parent[index - 1])
+    else:
+        return fall_left_leaf(node.parent)
+
+@insert.key('right')
+def insert_right(event):
+    head = event.selection.head
+    if head.index < len(head.subj):
+        if head.subj.islist():
+            head = Position.top(head.subj[head.index])
+        else:
+            head.index += 1
+    else:
+        head = fall_right_leaf(head.subj)
+    event.selection.set(head, head)
+
+def fall_right_leaf(node):
+    if node.parent is None:
+        return Position.bottom(node)
+    index = node.parent.index(node) + 1
+    if index < len(node.parent):
+        return Position.top(node.parent[index])
+    else:
+        return fall_right_leaf(node.parent)
+
+@insert.key('up')
+def insert_up(event):
+    navigate(event.selection.visual, event.selection, hcarets_above)
+
+@insert.key('down')
+def insert_down(event):
+    navigate(event.selection.visual, event.selection, hcarets_below)
+
+def navigate(editor, sel, hcarets_fn):
+    caret = find_caret(editor, sel.head.subj, sel.head.index)
+    if caret is None:
+        return
+    if sel.x_anchor is None:
+        sel.x_anchor = caret.quad[0]
+        if caret.index + 1 == sel.head.index:
+            sel.x_anchor = caret.quad[2]
+    def nearest(node):
+        x0,y0,x1,y1 = node.quad
+        return abs(x0 - sel.x_anchor)
+    try:
+        node = min(hcarets_fn(caret), key=nearest)
+    except ValueError as v:
+        return
+    else:
+        sel.set(Position(node.subj, node.index))
+
+def find_caret(editor, subj, index):
+    for frame in editor.rootbox.traverse():
+        if frame.subj == subj and (frame.index == index or frame.index + 1 == index):
+            return frame
+
+def hcarets_above(node):
+    parent = node.parent
+    success = False
+    while parent is not None:
+        if isinstance(parent, boxmodel.VBox):
+            index = parent.index(node)
+            for item in reversed(parent[:index]):
+                for subnode in item.traverse():
+                    if is_hcaret(subnode):
+                        yield subnode
+                        success = True
+                if success:
+                    return
+        node   = parent
+        parent = node.parent
+
+def hcarets_below(node):
+    parent = node.parent
+    success = False
+    while parent is not None:
+        if isinstance(parent, boxmodel.VBox):
+            index = parent.index(node)
+            for item in parent[index+1:]:
+                for subnode in item.traverse():
+                    if is_hcaret(subnode):
+                        yield subnode
+                        success = True
+                if success:
+                    return
+        node   = parent
+        parent = node.parent
+
+def is_hcaret(node):
+    return isinstance(node.subj, dom.Node)
+
+@node_insert.key('left alt')
+def node_insert_editor(event):
+    print 'insert editor'
+    sel = event.selection
+    if sel.subj.issymbol():
+        subj = sel.subj.parent
+    else:
+        subj = sel.subj
+    if subj is None:
+        return
+
+    cache_head, cache_tail = sel.head, sel.tail
+
+    body = dom.Symbol(subj.label)
+    document = dom.Document(body)
+    editor = event.selection.visual.create_sub_editor(document)
+    editor.color = (0, 0, 0, 0.9)
+
+    sel.visual = editor
+    sel.set(Position.bottom(body))
+
+    def position_hook(editor):
+        editor.width = editor.parent.width
+        editor.height = editor.inner_height
+        editor.x = 0
+        editor.y = editor.parent.height - editor.height
+    def hook(editor):
+        subj.label = editor.document.body[:]
+    def close_hook(editor):
+        subj.label = editor.document.body[:]
+        sel.visual = editor.parent
+        sel.set(cache_head, cache_tail)
+    editor.position_hook = position_hook
+    editor.close_hook  = close_hook
+    editor.update_hook = hook
+
+@insert.key('escape')
+def insert_escape(event):
+    visual = event.selection.visual
+    if visual.parent is not None:
+        visual.close()

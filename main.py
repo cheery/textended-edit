@@ -62,7 +62,6 @@ class Editor(object):
         self.position_hook = lambda editor: None
         self.update_hook = lambda editor: None
         self.close_hook = lambda editor: None
-        self.copybuf = None
         self.scroll_x = 0
         self.scroll_y = 0
         self.parent = None
@@ -362,37 +361,6 @@ def quad_enclosure(quads):
         x1 = max(x1, x3)
         y1 = max(y1, y3)
     return x0, y0, x1, y1
-
-#def hierarchy_of(node):
-#    result = [node]
-#    while node.parent is not None:
-#        result.append(node.parent)
-#        node = node.parent
-#    result.reverse()
-#    return result
-#
-#def simplify_selection(headpos, tailpos):
-#    if headpos.subj is tailpos.subj:
-#        return dom.OldSelection(headpos.subj, headpos.index, tailpos.index)
-#    hh = hierarchy_of(headpos.subj)
-#    th = hierarchy_of(tailpos.subj)
-#    i = 0
-#    for c_a, c_b in zip(hh, th):
-#        if c_a is c_b:
-#            i += 1
-#        else:
-#            break
-#    assert i > 0
-#    subj = hh[i-1]
-#    head_inc = i < len(hh)
-#    head = subj.index(hh[i]) if head_inc else headpos.index
-#    tail_inc = i < len(th)
-#    tail = subj.index(th[i]) if tail_inc else tailpos.index
-#    if tail <= head:
-#        head += head_inc
-#    else:
-#        tail += tail_inc
-#    return dom.OldSelection(subj, head, tail)
 
 cursor_tail = None
 

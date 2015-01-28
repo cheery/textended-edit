@@ -5,6 +5,7 @@ class Workspace(object):
     def __init__(self):
         self.documents = {}
         self.unbound = []
+        self.copybuf = None
 
     def new(self):
         body = dom.Literal(u"", [])
