@@ -202,11 +202,6 @@ def collect_bridges(layer):
                     target = subnode
             yield Bridge(layer, reference, target)
 
-def delta_point_quad(point, quad):
-    x, y = point
-    x0, y0, x1, y1 = quad
-    return min(max(x0, x), x1) - x, min(max(y0, y), y1) - y
-
 cursor = [0, 0]
 def update_cursor(t):
     flatlayer.clear()
@@ -278,28 +273,6 @@ def quad_enclosure(quads):
 
 cursor_tail = None
 
-def pick_nearest(editor, x, y):
-    cursor = x, y
-    def nearest(node, maxdist):
-        near, distance = None, maxdist
-        if isinstance(node, boxmodel.Composite):
-            dx, dy = delta_point_quad(cursor, node.quad)
-            if dx**2 + dy**4 > maxdist:
-                return near, distance
-            for child in node:
-                n, d = nearest(child, distance)
-                if d < distance:
-                    near = n
-                    distance = d
-            return near, distance
-        elif node.subj is not None:
-            dx, dy = delta_point_quad(cursor, node.quad)
-            offset = (x - (node.quad[0] + node.quad[2])*0.5) > 0
-            return Position(node.subj, node.index + offset), dx**2 + dy**4
-        else:
-            return None, float('inf')
-    return nearest(editor.rootbox, 500**4)[0]
-
 def paint(t):
     #272822
     glClearColor(0x27/255.0, 0x28/255.0, 0x22/255.0, 1)
@@ -340,15 +313,17 @@ while live:
             cursor[0] = event.motion.x
             cursor[1] = event.motion.y
             if event.motion.state != 0:
-                position = pick_nearest(selection.visual, cursor[0], cursor[1])
+                position = editor.pick(*cursor)
                 if position is not None:
+                    selection.visual = editor
                     selection.set(position, selection.tail)
         elif event.type == SDL_MOUSEBUTTONDOWN:
             cursor[0] = event.motion.x
             cursor[1] = event.motion.y
             sel = selection
-            position = pick_nearest(selection.visual, cursor[0], cursor[1])
+            position = editor.pick(*cursor)
             if position is not None:
+                selection.visual = editor
                 selection.set(position)
         elif event.type == SDL_MOUSEBUTTONUP:
             pass

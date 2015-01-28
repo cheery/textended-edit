@@ -1,3 +1,4 @@
+import boxmodel
 import defaultlayout
 from mapping import Mapping
 from compositor import Compositor
@@ -60,6 +61,10 @@ class Visual(object):
         self.ver = 0
         return layer
 
+    def pick(self, x, y):
+        cursor = x, y
+        return boxmodel.pick_nearest(self.rootbox, x, y)
+
 class VisualLayer(object):
     def __init__(self, document):
         self.document = document
@@ -75,4 +80,3 @@ class Bridge(object):
         self.mapping = Mapping(self.mappings, body, None)
         self.build_layout = defaultlayout.build
         self.rootbox = None
-

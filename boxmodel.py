@@ -1,3 +1,5 @@
+from selection import Position
+
 class Frame(object):
     parent = None
     quad = None
@@ -172,3 +174,28 @@ def set_dimen(glue, expand):
     else:
         glue.computed = glue.width + expand.real * glue.stretch.real
     return glue.computed
+
+def pick_nearest(box, x, y):
+    def nearest(node, maxdist):
+        near, distance = None, maxdist
+        if isinstance(node, Composite):
+            dx, dy = delta_point_quad(x, y, node.quad)
+            if dx**2 + dy**4 > maxdist:
+                return near, distance
+            for child in node:
+                n, d = nearest(child, distance)
+                if d < distance:
+                    near = n
+                    distance = d
+            return near, distance
+        elif node.subj is not None:
+            dx, dy = delta_point_quad(x, y, node.quad)
+            offset = (x - (node.quad[0] + node.quad[2])*0.5) > 0
+            return Position(node.subj, node.index + offset), dx**2 + dy**4
+        else:
+            return None, float('inf')
+    return nearest(box, 500**4)[0]
+
+def delta_point_quad(x, y, quad):
+    x0, y0, x1, y1 = quad
+    return min(max(x0, x), x1) - x, min(max(y0, y), y1) - y
