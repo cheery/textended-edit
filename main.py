@@ -35,6 +35,7 @@ default_env = {
         'yellow': (1.0, 1.0, 0.0, 1.0),
         'pink': (1.0, 0.0, 1.0, 1.0),
         'gray': (0.5, 0.5, 0.5, 1.0),
+        'background': (0x27/255.0, 0x28/255.0, 0x22/255.0, 1), #272822
 }
 
 module = sys.modules[__name__]
@@ -71,134 +72,72 @@ glEnable(GL_BLEND)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 flatlayer = renderers.FlatLayer()
 
-def update_document(t):
-    def layout_editor(editor):
-        editor.mappings.clear()
-        editor.compositor.clear()
-        editor.rootbox = boxmodel.vpack(editor.mapping.update(editor.build_layout, default_env))
-        editor.inner_width = editor.rootbox.width + 20
-        editor.inner_height = editor.rootbox.vsize + 20
-        editor.position_hook(editor)
-        editor.compositor.clear()
-        editor.compositor.decor((0, 0, editor.width, editor.height), editor.background, editor.color)
-        editor.compositor.compose(editor.rootbox, 10, 10 + editor.rootbox.height)
-        for subeditor in editor.children:
-            layout_editor(subeditor)
-    must_update = editor.must_update
-    must_update |= configure_mapping(editor, editor.mapping, editor.document.body)
-    if editor.document.ver != editor.ver or must_update:
-        layout_editor(editor)
-        editor.ver = editor.document.ver
-        update_bridges()
-        editor.must_update = False
+def paint(t):
+    glClearColor(*default_env['background'])
+    glClear(GL_COLOR_BUFFER_BIT)
 
-
-extensions_table = {}
-
-def configure_mapping(editor, mapping, body):
-    for directive in body:
-        if directive.isstring() and directive.label == 'language':
-            name = directive[:]
-            return get_extension_layout(editor, mapping, name)
-    return False
-
-class Extension(object):
-    def __init__(self, path, module):
-        self.path = path
-        self.module = module
-
-    def exception_catch_build(self, mapping, *args):
-        try:
-            return iter(self.module.layout(mapping, *args))
-        except Exception as error:
-            traceback.print_exc()
-            return defaultlayout.build(mapping, *args)
-
-def get_extension_layout(editor, mapping, name):
-    if name in extensions_table:
-        ext = extensions_table[name]
-        editor.build_layout = ext.exception_catch_build
-        return False
     try:
-        module = importlib.import_module("extensions." + name)
-    except ImportError as error:
-        editor.build_layout = defaultlayout.build
-        return False
-    else:
-        ext = Extension(module.__file__, module)
-        ext.last_check = time.time()
-        ext.mtime = os.path.getmtime(ext.path)
-        extensions_table[name] = ext
-        print "loaded language module", name
-        editor.build_layout = ext.exception_catch_build
-        return True
+        update_visual(editor)
+        update_cursor(t)
+    except:
+        traceback.print_exc()
 
-def update_bridges():
-    editor.bridges = []
-    for layer in editor.layers:
-        editor.bridges.extend(collect_bridges(layer))
-    sectors = []
-    for bridge in editor.bridges:
-        referenced = editor.document.nodes.get(bridge.reference)
-        if referenced not in editor.mappings:
-            continue
-        bridge.rootbox = boxmodel.vpack(bridge.mapping.update(bridge.build_layout, default_env))
-        x0, y0, x1, y1 = editor.mappings[referenced].tokens[0].quad
-        editor.compositor.decor((x0,y0,x1,y1), boxmodel.Patch9("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
-        bridge.y = y0
-        sectors.append(bridge)
-    sectors.sort(key=lambda b: b.y)
-    max_y = 0
-    for bridge in sectors:
-        y = max(bridge.y, max_y)
-        editor.compositor.compose(bridge.rootbox, editor.rootbox.width + 50, y)
-        max_y = y + bridge.rootbox.vsize
+    scale = 1.0
+    editor.compositor.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
+    for subeditor in editor.children:
+        subeditor.compositor.render(-subeditor.x, -subeditor.y, width/scale, height/scale)
 
-def update_characters(t):
-    def layout_editor(editor):
-        editor.rootbox = editor.build_rootbox(editor.mappings, editor.document.body)
-        editor.inner_width = editor.rootbox.width + 20
-        editor.inner_height = editor.rootbox.vsize + 20
-        editor.position_hook(editor)
-        editor.compositor.clear()
-        editor.compositor.decor((0, 0, editor.width, editor.height), editor.background, editor.color)
-        editor.compositor.compose(editor.rootbox, 10, 10 + editor.rootbox.height)
-        for subeditor in editor.children:
-            layout_editor(subeditor)
-    if editor.rootbox is None or editor.document.ver != editor.ver:
-        layout_editor(editor)
-        editor.ver = editor.document.ver
-        editor.bridges = []
-        for layer in editor.layers:
-            editor.bridges.extend(collect_bridges(layer))
+    flatlayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
+
+def update_visual(visual):
+    must_update = visual.must_update
+    primary = visual.primary
+    if primary.document.body.islist():
+        for directive in primary.document.body:
+            if directive.isstring() and directive.label == 'language':
+                name = directive[:]
+                try:
+                    primary.driver = importlib.import_module("extensions." + name)
+                    if not hasattr(primary.driver, 'link_bridges'):
+                        primary.driver.link_bridges = defaultlayout.link_bridges
+                    must_update = True
+                    break
+                except ImportError as error:
+                    primary.driver = defaultlayout
+    if primary.document.ver != primary.ver or must_update:
+        visual.mappings.clear()
+        visual.compositor.clear()
+        visual.rootbox = boxmodel.vpack(visual.mapping.update(primary.driver.layout, default_env))
+        visual.inner_width = visual.rootbox.width + 20
+        visual.inner_height = visual.rootbox.vsize + 20
+        visual.position_hook(visual)
+        visual.compositor.clear()
+        visual.compositor.decor((0, 0, visual.width, visual.height), visual.background, visual.color)
+        visual.compositor.compose(visual.rootbox, 10, 10 + visual.rootbox.height)
+        primary.ver = primary.document.ver
+        visual.bridges = []
+        for layer in visual.layers:
+            visual.bridges.extend(layer.driver.link_bridges(primary, layer))
         sectors = []
-        for bridge in editor.bridges:
-            referenced = editor.document.nodes.get(bridge.reference)
-            if referenced not in editor.mappings:
+        for bridge in visual.bridges:
+            referenced = visual.document.nodes.get(bridge.reference)
+            if referenced not in visual.mappings:
                 continue
-            bridge.rootbox = bridge.layer.build_rootbox(bridge.mappings, bridge.body)
-            x0, y0, x1, y1 = editor.mappings[referenced].tokens[0].quad
-            editor.compositor.decor((x0,y0,x1,y1), boxmodel.Patch9("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
+            bridge.rootbox = boxmodel.vpack(bridge.mapping.update(bridge.layer.driver.layout, default_env))
+            x0, y0, x1, y1 = visual.mappings[referenced].tokens[0].quad
+            visual.compositor.decor((x0,y0,x1,y1), boxmodel.Patch9("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
             bridge.y = y0
             sectors.append(bridge)
         sectors.sort(key=lambda b: b.y)
         max_y = 0
         for bridge in sectors:
             y = max(bridge.y, max_y)
-            editor.compositor.compose(bridge.rootbox, editor.rootbox.width + 50, y)
+            visual.compositor.compose(bridge.rootbox, visual.rootbox.width + 50, y)
             max_y = y + bridge.rootbox.vsize
+        visual.must_update = False
 
-def collect_bridges(layer):
-    for node in layer.document.body:
-        if node.islist() and node.label == 'reference':
-            reference = None
-            target = None
-            for subnode in node:
-                if subnode.isbinary():
-                    reference = subnode[:]
-                elif subnode.islist():
-                    target = subnode
-            yield Bridge(layer, reference, target)
+    for subvisual in visual.children:
+        update_visual(subvisual)
 
 cursor = [0, 0]
 def update_cursor(t):
@@ -256,39 +195,14 @@ def update_cursor(t):
             elif start <= node.index < stop:
                 cursors[node.parent].append(node.quad)
 
-    for container, cursorset in cursors.items():
-        quad = quad_enclosure(cursorset)
-        flatlayer.quad(quad, color)
-
-def quad_enclosure(quads):
-    x0, y0, x1, y1 = quads[0]
-    for x2, y2, x3, y3 in quads[1:]:
-        x0 = min(x0, x2)
-        y0 = min(y0, y2)
-        x1 = max(x1, x3)
-        y1 = max(y1, y3)
-    return x0, y0, x1, y1
-
-cursor_tail = None
-
-def paint(t):
-    #272822
-    glClearColor(0x27/255.0, 0x28/255.0, 0x22/255.0, 1)
-    glClear(GL_COLOR_BUFFER_BIT)
-
-    update_document(t)
-    try:
-        update_cursor(t)
-    except:
-        traceback.print_exc()
-
-    scale = 1.0
-    editor.compositor.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
-    for subeditor in editor.children:
-        subeditor.compositor.render(-subeditor.x, -subeditor.y, width/scale, height/scale)
-
-
-    flatlayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
+    for container, quads in cursors.items():
+        x0, y0, x1, y1 = quads[0]
+        for x2, y2, x3, y3 in quads[1:]:
+            x0 = min(x0, x2)
+            y0 = min(y0, y2)
+            x1 = max(x1, x3)
+            y1 = max(y1, y3)
+        flatlayer.quad((x0,y0,x1,y1), color)
 
 mode = keybindings.insert
 keyboard = sdl_backend.KeyboardStream()

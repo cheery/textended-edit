@@ -1,6 +1,18 @@
-import layout, font, boxmodel, dom
+import layout, font, boxmodel, dom, visual
 
-def build(mapping, env):
+def link_bridges(primary, layer):
+    for node in layer.document.body:
+        if node.islist() and node.label == 'reference':
+            reference = None
+            target = None
+            for subnode in node:
+                if subnode.isbinary():
+                    reference = subnode[:]
+                elif subnode.islist():
+                    target = subnode
+            yield visual.Bridge(layer, reference, target)
+
+def layout(mapping, env):
     node = mapping.subj
     if isinstance(node, dom.Symbol):
         sym = env['font'](node, env['fontsize'], color=env['white'])
@@ -31,7 +43,7 @@ def build(mapping, env):
         for submapping in mapping:
             if submapping.index > 0:
                 tokens.append(boxmodel.Glue(4))
-            tokens.extend(submapping.update(build, env))
+            tokens.extend(submapping.update(layout, env))
         return tokens
     else:
         tokens = []
@@ -42,7 +54,7 @@ def build(mapping, env):
         for submapping in mapping:
             if space:
                 tokens.extend(env['font'](' ', env['fontsize'], color=env['white']))
-            tokens.extend(submapping.update(build, env))
+            tokens.extend(submapping.update(layout, env))
             space = True
         return [lazy_lisp_break(env, tokens, 300)]
 

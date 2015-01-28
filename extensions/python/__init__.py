@@ -16,7 +16,7 @@ subscript = Context('subscript')
 def translate_pattern(mapping, env, pattern):
     result = pattern.scan(grammar, mapping.subj)
     if result is None:
-        return defaultlayout.build(mapping, env)
+        return defaultlayout.layout(mapping, env)
     match, context = result
     for c in reversed(context):
         if callable(c.pre):

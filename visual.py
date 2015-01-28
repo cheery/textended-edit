@@ -7,20 +7,22 @@ class Visual(object):
     def __init__(self, images, document, x=0, y=0, width=200, height=200):
         self.images = images
         self.compositor = Compositor(images)
-        self.document = document
-        self.layers = []
-        self.children = []
-        self.ver = 0
+        self.primary = VisualLayer(document)
+
+        self.must_update = False
         self.mappings = {}
         self.mapping = Mapping(self.mappings, self.document.body, None)
-        self.build_layout = defaultlayout.build
         self.rootbox = None
+
+        self.layers = []
         self.bridges = []
+
         self.position_hook = lambda editor: None
         self.update_hook = lambda editor: None
         self.close_hook = lambda editor: None
+
         self.parent = None
-        self.must_update = False
+        self.children = []
 
         self.x = x
         self.y = y
@@ -30,6 +32,10 @@ class Visual(object):
         self.scroll_y = 0
         self.color = None
         self.background = None
+
+    @property
+    def document(self):
+        return self.primary.document
 
     def close(self):
         self.compositor.close()
@@ -47,7 +53,7 @@ class Visual(object):
             return obj.rect
 
     def create_sub_editor(self, document):
-        subeditor = Editor(self.images, document)
+        subeditor = Visual(self.images, document)
         subeditor.width = self.width
         subeditor.height = self.height
         self.children.append(subeditor)
@@ -66,10 +72,10 @@ class Visual(object):
         return boxmodel.pick_nearest(self.rootbox, x, y)
 
 class VisualLayer(object):
-    def __init__(self, document):
+    def __init__(self, document, driver=defaultlayout):
         self.document = document
+        self.driver = driver
         self.ver = 0
-        self.build_rootbox = None
 
 class Bridge(object):
     def __init__(self, layer, reference, body):
@@ -78,5 +84,4 @@ class Bridge(object):
         self.body = body
         self.mappings = {}
         self.mapping = Mapping(self.mappings, body, None)
-        self.build_layout = defaultlayout.build
         self.rootbox = None
