@@ -8,8 +8,8 @@ import treepython
 import socket
 import os
 import sys
-import imp
 import time
+import importlib
 from threading import Thread
 
 def new_unix_socket(path):
@@ -21,9 +21,8 @@ def new_unix_socket(path):
 last_response = time.time()
 queue = []
 
-#module_name = 'sticky_icky'
-#module = imp.load_module(module_name, *imp.find_module(module_name))
-import sticky_icky as module
+module = importlib.import_module(sys.argv[1])
+
 def respond():
     global last_response
     last_response = time.time()

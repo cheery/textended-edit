@@ -1,20 +1,16 @@
 import treepython
-import extensions
-import gate
 import sys
 import traceback
 import math
 import time
 import font
 import boxmodel
-import textended
 import renderers
 import tempfile
 import layout
 import os
-import ast
 import defaultlayout
-import imp
+import importlib
 from OpenGL.GL import *
 from OpenGL.GL import shaders
 from ctypes import c_void_p
@@ -118,37 +114,26 @@ class Extension(object):
             return iter(self.module.layout(mapping, *args))
         except Exception as error:
             traceback.print_exc()
-            mapping.func = defaultlayout.build
             return defaultlayout.build(mapping, *args)
 
 def get_extension_layout(editor, mapping, name):
     if name in extensions_table:
         ext = extensions_table[name]
-        if ext.last_check + 1.0 < time.time():
-            ext.last_check = time.time()
-            mtime = os.path.getmtime(ext.path)
-            if ext.mtime >= mtime:
-                return False 
-        else:
-            return False
-    path = "extensions/" + name + "/__init__.t+"
-    py_path = "extensions/" + name + "/__init__.py"
-    modname = "extensions." + name
-    if os.path.exists(path):
-        module = treepython.import_file_to_module("extensions." + name, path)
-    elif os.path.exists(py_path):
-        module = imp.load_source(modname, py_path)
-        path = py_path
-    else:
+        editor.build_layout = ext.exception_catch_build
+        return False
+    try:
+        module = importlib.import_module("extensions." + name)
+    except ImportError as error:
         editor.build_layout = defaultlayout.build
         return False
-    ext = Extension(path, module)
-    ext.last_check = time.time()
-    ext.mtime = os.path.getmtime(ext.path)
-    extensions_table[name] = ext
-    print "loaded language module", name
-    editor.build_layout = ext.exception_catch_build
-    return True
+    else:
+        ext = Extension(module.__file__, module)
+        ext.last_check = time.time()
+        ext.mtime = os.path.getmtime(ext.path)
+        extensions_table[name] = ext
+        print "loaded language module", name
+        editor.build_layout = ext.exception_catch_build
+        return True
 
 def update_bridges():
     editor.bridges = []
