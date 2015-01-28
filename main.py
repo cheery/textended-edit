@@ -10,7 +10,6 @@ import tempfile
 import layout
 import os
 import defaultlayout
-import importlib
 from OpenGL.GL import *
 from OpenGL.GL import shaders
 from ctypes import c_void_p
@@ -61,7 +60,7 @@ def create_editor(images):
         document = workspace.get(sys.argv[1])
     else:
         document = workspace.new()
-    editor = Visual(images, document, width=width, height=height)
+    editor = Visual(default_env, images, document, width=width, height=height)
     for path in sys.argv[2:]:
         editor.create_layer(workspace.get(path, create=False))
     return editor
@@ -77,7 +76,7 @@ def paint(t):
     glClear(GL_COLOR_BUFFER_BIT)
 
     try:
-        update_visual(editor)
+        editor.update()
         update_cursor(t)
     except:
         traceback.print_exc()
@@ -88,56 +87,6 @@ def paint(t):
         subeditor.compositor.render(-subeditor.x, -subeditor.y, width/scale, height/scale)
 
     flatlayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
-
-def update_visual(visual):
-    must_update = visual.must_update
-    primary = visual.primary
-    if primary.document.body.islist():
-        for directive in primary.document.body:
-            if directive.isstring() and directive.label == 'language':
-                name = directive[:]
-                try:
-                    primary.driver = importlib.import_module("extensions." + name)
-                    if not hasattr(primary.driver, 'link_bridges'):
-                        primary.driver.link_bridges = defaultlayout.link_bridges
-                    must_update = True
-                    break
-                except ImportError as error:
-                    primary.driver = defaultlayout
-    if primary.document.ver != primary.ver or must_update:
-        visual.mappings.clear()
-        visual.compositor.clear()
-        visual.rootbox = boxmodel.vpack(visual.mapping.update(primary.driver.layout, default_env))
-        visual.inner_width = visual.rootbox.width + 20
-        visual.inner_height = visual.rootbox.vsize + 20
-        visual.position_hook(visual)
-        visual.compositor.clear()
-        visual.compositor.decor((0, 0, visual.width, visual.height), visual.background, visual.color)
-        visual.compositor.compose(visual.rootbox, 10, 10 + visual.rootbox.height)
-        primary.ver = primary.document.ver
-        visual.bridges = []
-        for layer in visual.layers:
-            visual.bridges.extend(layer.driver.link_bridges(primary, layer))
-        sectors = []
-        for bridge in visual.bridges:
-            referenced = visual.document.nodes.get(bridge.reference)
-            if referenced not in visual.mappings:
-                continue
-            bridge.rootbox = boxmodel.vpack(bridge.mapping.update(bridge.layer.driver.layout, default_env))
-            x0, y0, x1, y1 = visual.mappings[referenced].tokens[0].quad
-            visual.compositor.decor((x0,y0,x1,y1), boxmodel.Patch9("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
-            bridge.y = y0
-            sectors.append(bridge)
-        sectors.sort(key=lambda b: b.y)
-        max_y = 0
-        for bridge in sectors:
-            y = max(bridge.y, max_y)
-            visual.compositor.compose(bridge.rootbox, visual.rootbox.width + 50, y)
-            max_y = y + bridge.rootbox.vsize
-        visual.must_update = False
-
-    for subvisual in visual.children:
-        update_visual(subvisual)
 
 cursor = [0, 0]
 def update_cursor(t):

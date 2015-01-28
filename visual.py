@@ -1,10 +1,12 @@
 import boxmodel
 import defaultlayout
+import importlib
 from mapping import Mapping
 from compositor import Compositor
 
 class Visual(object):
-    def __init__(self, images, document, x=0, y=0, width=200, height=200):
+    def __init__(self, env, images, document, x=0, y=0, width=200, height=200):
+        self.env = env
         self.images = images
         self.compositor = Compositor(images)
         self.primary = VisualLayer(document)
@@ -70,6 +72,56 @@ class Visual(object):
     def pick(self, x, y):
         cursor = x, y
         return boxmodel.pick_nearest(self.rootbox, x, y)
+
+    def update(self):
+        must_update = self.must_update
+        primary = self.primary
+        if primary.document.body.islist():
+            for directive in primary.document.body:
+                if directive.isstring() and directive.label == 'language':
+                    name = directive[:]
+                    try:
+                        primary.driver = importlib.import_module("extensions." + name)
+                        if not hasattr(primary.driver, 'link_bridges'):
+                            primary.driver.link_bridges = defaultlayout.link_bridges
+                        must_update = True
+                        break
+                    except ImportError as error:
+                        primary.driver = defaultlayout
+        if primary.document.ver != primary.ver or must_update:
+            self.mappings.clear()
+            self.compositor.clear()
+            self.rootbox = boxmodel.vpack(self.mapping.update(primary.driver.layout, self.env))
+            self.inner_width = self.rootbox.width + 20
+            self.inner_height = self.rootbox.vsize + 20
+            self.position_hook(self)
+            self.compositor.clear()
+            self.compositor.decor((0, 0, self.width, self.height), self.background, self.color)
+            self.compositor.compose(self.rootbox, 10, 10 + self.rootbox.height)
+            primary.ver = primary.document.ver
+            self.bridges = []
+            for layer in self.layers:
+                self.bridges.extend(layer.driver.link_bridges(primary, layer))
+            sectors = []
+            for bridge in self.bridges:
+                referenced = self.document.nodes.get(bridge.reference)
+                if referenced not in self.mappings:
+                    continue
+                bridge.rootbox = boxmodel.vpack(bridge.mapping.update(bridge.layer.driver.layout, self.env))
+                x0, y0, x1, y1 = self.mappings[referenced].tokens[0].quad
+                self.compositor.decor((x0,y0,x1,y1), boxmodel.Patch9("assets/border-1px.png"), (1.0, 0.0, 0.0, 0.25))
+                bridge.y = y0
+                sectors.append(bridge)
+            sectors.sort(key=lambda b: b.y)
+            max_y = 0
+            for bridge in sectors:
+                y = max(bridge.y, max_y)
+                self.compositor.compose(bridge.rootbox, self.rootbox.width + 50, y)
+                max_y = y + bridge.rootbox.vsize
+            self.must_update = False
+
+        for subvisual in self.children:
+            subvisual.update()
 
 class VisualLayer(object):
     def __init__(self, document, driver=defaultlayout):
