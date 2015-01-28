@@ -307,16 +307,13 @@ def pick_nearest(editor, x, y):
                     near = n
                     distance = d
             return near, distance
-        elif is_hcaret(node):
+        elif node.subj is not None:
             dx, dy = delta_point_quad(cursor, node.quad)
             offset = (x - (node.quad[0] + node.quad[2])*0.5) > 0
             return Position(node.subj, node.index + offset), dx**2 + dy**4
         else:
             return None, float('inf')
     return nearest(editor.rootbox, 500**4)[0]
-
-def is_hcaret(node):
-    return isinstance(node.subj, dom.Node)
 
 def paint(t):
     #272822

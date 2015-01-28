@@ -328,7 +328,7 @@ def hcarets_above(node):
             index = parent.index(node)
             for item in reversed(parent[:index]):
                 for subnode in item.traverse():
-                    if is_hcaret(subnode):
+                    if subnode.subj is not None:
                         yield subnode
                         success = True
                 if success:
@@ -344,16 +344,13 @@ def hcarets_below(node):
             index = parent.index(node)
             for item in parent[index+1:]:
                 for subnode in item.traverse():
-                    if is_hcaret(subnode):
+                    if subnode.subj is not None:
                         yield subnode
                         success = True
                 if success:
                     return
         node   = parent
         parent = node.parent
-
-def is_hcaret(node):
-    return isinstance(node.subj, dom.Node)
 
 @node_insert.key('left alt')
 def node_insert_editor(event):
