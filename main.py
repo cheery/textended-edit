@@ -57,7 +57,7 @@ SDL_GetWindowSize(window, byref(width), byref(height))
 width = width.value
 height = height.value
 
-images = renderers.ImageResources()
+images = sdl_backend.ImageResources()
 
 def create_editor(images):
     if len(sys.argv) > 1:

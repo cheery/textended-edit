@@ -1,24 +1,7 @@
 from OpenGL.GL import *
 from OpenGL.GL import shaders
 from ctypes import POINTER, cast, c_char, c_void_p, byref
-from sdl2 import *
-from sdl2.sdlimage import *
 import atlas
-
-class ImageResources(object):
-    def __init__(self):
-        self.cache = {}
-
-    def get(self, path):
-        if path in self.cache:
-            return self.cache[path]
-        self.cache[path] = image = IMG_Load(path.encode('utf-8'))
-        return image
-
-    def discard(self, path):
-        if path in self.cache:
-            image = self.cache.pop(path)
-            SDL_FreeSurface(image)
 
 class ImageLayer(object):
     def __init__(self, images):
