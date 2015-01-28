@@ -60,14 +60,12 @@ def create_editor(images):
         document = workspace.get(sys.argv[1])
     else:
         document = workspace.new()
-    editor = Visual(images, document)
+    editor = Visual(images, document, width=width, height=height)
     for path in sys.argv[2:]:
         editor.create_layer(workspace.get(path, create=False))
     return editor
 editor = create_editor(images)
 selection = Selection(editor, Position.bottom(editor.document.body))
-editor.width = width
-editor.height = height
 
 glEnable(GL_BLEND)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
