@@ -15,8 +15,6 @@ import os
 import ast
 import defaultlayout
 import imp
-from mapping import Mapping
-from compositor import Compositor
 from OpenGL.GL import *
 from OpenGL.GL import shaders
 from ctypes import c_void_p
@@ -26,10 +24,9 @@ from selection import Position, Selection
 from ctypes import c_int, byref, c_char, POINTER, c_void_p
 from sdl2 import *
 from workspace import Workspace
+from visual import Visual, Bridge
 
 workspace = Workspace()
-
-debug_layout = False
 
 default_env = {
         'font': font.load('OpenSans.fnt'),
@@ -41,78 +38,6 @@ default_env = {
         'pink': (1.0, 0.0, 1.0, 1.0),
         'gray': (0.5, 0.5, 0.5, 1.0),
 }
-
-class Editor(object):
-    def __init__(self, images, document, x=0, y=0, width=200, height=200):
-        self.images = images
-        self.compositor = Compositor(images, debug_layout)
-        self.document = document
-        self.layers = []
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.children = []
-        self.ver = 0
-        self.mappings = {}
-        self.mapping = Mapping(self.mappings, self.document.body, None)
-        self.build_layout = defaultlayout.build
-        self.rootbox = None
-        self.bridges = []
-        self.position_hook = lambda editor: None
-        self.update_hook = lambda editor: None
-        self.close_hook = lambda editor: None
-        self.scroll_x = 0
-        self.scroll_y = 0
-        self.parent = None
-        self.background = None
-        self.color = None
-
-    def close(self):
-        self.compositor.close()
-        self.close_hook(self)
-        if self.parent is not None:
-            self.parent.children.remove(self)
-
-    def get_rect(self, node):
-        if node not in self.mappings:
-            return
-        obj = self.mappings[node].obj
-        if isinstance(obj, list):
-            return rect_enclosure([box.rect for box in obj if hasattr(box, 'rect')])
-        elif obj is not None:
-            return obj.rect
-
-    def create_sub_editor(self, document):
-        subeditor = Editor(self.images, document)
-        subeditor.width = self.width
-        subeditor.height = self.height
-        self.children.append(subeditor)
-        subeditor.parent = self
-        return subeditor
-
-    def create_layer(self, document):
-        print 'layer created'
-        layer = EditorLayer(document)
-        self.layers.append(layer)
-        self.ver = 0
-        return layer
-
-class EditorLayer(object):
-    def __init__(self, document):
-        self.document = document
-        self.ver = 0
-        self.build_rootbox = None
-
-class Bridge(object):
-    def __init__(self, layer, reference, body):
-        self.layer = layer
-        self.reference = reference
-        self.body = body
-        self.mappings = {}
-        self.mapping = Mapping(self.mappings, body, None)
-        self.build_layout = defaultlayout.build
-        self.rootbox = None
 
 module = sys.modules[__name__]
 
@@ -137,7 +62,7 @@ def create_editor(images):
         document = workspace.get(sys.argv[1])
     else:
         document = workspace.new()
-    editor = Editor(images, document)
+    editor = Visual(images, document)
     for path in sys.argv[2:]:
         editor.create_layer(workspace.get(path, create=False))
     return editor
@@ -163,11 +88,13 @@ def update_document(t):
         editor.compositor.compose(editor.rootbox, 10, 10 + editor.rootbox.height)
         for subeditor in editor.children:
             layout_editor(subeditor)
-    must_update = configure_mapping(editor, editor.mapping, editor.document.body)
+    must_update = editor.must_update
+    must_update |= configure_mapping(editor, editor.mapping, editor.document.body)
     if editor.document.ver != editor.ver or must_update:
         layout_editor(editor)
         editor.ver = editor.document.ver
         update_bridges()
+        editor.must_update = False
 
 
 extensions_table = {}

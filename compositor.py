@@ -38,6 +38,8 @@ class Compositor(object):
         subj.quad = x, y-subj.height, x+subj.width, y+subj.depth
         if self.debug:
             self.imglayer.patch9(subj.quad, self.imglayer.patch9_texcoords("assets/border-1px.png"), (1.0, 1.0, 1.0, 0.1))
+            if subj.subj is not None:
+                self.imglayer.quad((x-1, y-1, x+1, y+1), self.imglayer.texcoords(None), (1.0, 0.0, 0.0, 1.0))
         if isinstance(subj, boxmodel.HBox):
             for node in subj.contents:
                 if isinstance(node, boxmodel.Glue):

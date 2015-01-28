@@ -9,6 +9,8 @@ class Frame(object):
         yield self
 
     def set_subj(self, subj, index=0):
+        if isinstance(subj, (str, unicode)):
+            return self
         self.subj = subj
         self.index = index
         return self

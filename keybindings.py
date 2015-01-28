@@ -241,6 +241,12 @@ def evaluate_document(event):
         event.workspace.attach(ser.document, '<evaluation error>')
         event.selection.visual.create_layer(ser.document)
 
+@insert.key('f12')
+def debug_layout(event):
+    visual = event.selection.visual
+    visual.compositor.debug = not visual.compositor.debug
+    visual.must_update = True
+
 @insert.key('left')
 def insert_left(event):
     head = event.selection.head
