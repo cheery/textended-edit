@@ -86,7 +86,8 @@ def paint(t):
     for subeditor in editor.children:
         subeditor.compositor.render(-subeditor.x, -subeditor.y, width/scale, height/scale)
 
-    flatlayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
+    visual = selection.visual
+    flatlayer.render(-visual.x - visual.scroll_x, -visual.y - visual.scroll_y, width/scale, height/scale)
 
 cursor = [0, 0]
 def update_cursor(t):
@@ -153,6 +154,16 @@ def update_cursor(t):
             y1 = max(y1, y3)
         flatlayer.quad((x0,y0,x1,y1), color)
 
+def pick(visual, x, y, drag=False):
+    if visual.children:
+        for child in visual.children:
+            pick(child, x, y, drag)
+    else:
+        position = visual.pick(x - visual.x, y - visual.y)
+        if position is not None:
+            selection.visual = visual
+            selection.set(position, selection.tail if drag else None)
+
 mode = keybindings.insert
 keyboard = sdl_backend.KeyboardStream()
 event = SDL_Event()
@@ -174,18 +185,11 @@ while live:
             cursor[0] = event.motion.x
             cursor[1] = event.motion.y
             if event.motion.state != 0:
-                position = editor.pick(*cursor)
-                if position is not None:
-                    selection.visual = editor
-                    selection.set(position, selection.tail)
+                pick(editor, cursor[0], cursor[1], True)
         elif event.type == SDL_MOUSEBUTTONDOWN:
             cursor[0] = event.motion.x
             cursor[1] = event.motion.y
-            sel = selection
-            position = editor.pick(*cursor)
-            if position is not None:
-                selection.visual = editor
-                selection.set(position)
+            pick(editor, cursor[0], cursor[1], False)
         elif event.type == SDL_MOUSEBUTTONUP:
             pass
         elif event.type == SDL_MOUSEWHEEL:

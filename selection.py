@@ -49,12 +49,13 @@ class Selection(object):
                 if p0 is not p1:
                     break
                 i += 1
-            assert i > 0
+            if i == 0:
+                return False
             self.subj = subj = h0[i-1]
             head_inc = i < len(h0)
-            self.subj_head = subj.index(h0[i]) if head_inc else headpos.index
+            self.subj_head = subj.index(h0[i]) if head_inc else head.index
             tail_inc = i < len(h1)
-            self.subj_tail = subj.index(h1[i]) if tail_inc else tailpos.index
+            self.subj_tail = subj.index(h1[i]) if tail_inc else tail.index
             if self.subj_tail <= self.subj_head:
                 self.subj_head += head_inc
             else:
@@ -62,6 +63,7 @@ class Selection(object):
         self.head = head
         self.tail = tail
         self.x_anchor = None
+        return True
 
     def drop(self):
         contents = self.subj.drop(self.start, self.stop)

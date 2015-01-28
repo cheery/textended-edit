@@ -70,7 +70,12 @@ class Visual(object):
         return layer
 
     def pick(self, x, y):
-        cursor = x, y
+        for bridge in self.bridges:
+            x0, y0, x1, y1 = bridge.rootbox.quad
+            if x0 <= x < x1 and y0 <= y < y1:
+                result = boxmodel.pick_nearest(bridge.rootbox, x, y)
+                if result is not None:
+                    return result
         return boxmodel.pick_nearest(self.rootbox, x, y)
 
     def update(self):
