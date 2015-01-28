@@ -25,6 +25,8 @@ from ctypes import c_int, byref, c_char, POINTER, c_void_p
 from sdl2 import *
 from workspace import Workspace
 from visual import Visual, Bridge
+import sdl_backend
+import keybindings
 
 workspace = Workspace()
 
@@ -335,59 +337,8 @@ def paint(t):
 
     flatlayer.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
 
-modifiers = {
-    KMOD_LSHIFT:  'left shift',
-    KMOD_RSHIFT:  'right shift',
-    KMOD_LCTRL:  'left ctrl',
-    KMOD_RCTRL:  'right ctrl',
-    KMOD_LALT:   'left alt',
-    KMOD_RALT:   'right alt',
-    KMOD_LGUI:  'left gui',
-    KMOD_RGUI:  'right gui',
-    KMOD_ALT:   'alt',
-    KMOD_NUM:   'num',
-    KMOD_CAPS:  'caps',
-    KMOD_MODE:  'mode',
-    KMOD_SHIFT: 'shift',
-    KMOD_CTRL:  'ctrl',
-    KMOD_GUI:   'gui',
-}
-
-class KeyboardStream(object):
-    def __init__(self):
-        self.name = None
-        self.mods = None
-        self.text = None
-        self.pending = []
-
-    def flush(self):
-        if self.name is not None:
-            self.pending.append((self.name, self.mods, self.text))
-            self.name = None
-            self.mods = None
-            self.text = None
-
-    def push_event(self, ev):
-        if ev.type == SDL_TEXTINPUT:
-            self.text = ev.text.text.decode('utf-8')
-        if ev.type == SDL_KEYDOWN:
-            sym = ev.key.keysym.sym
-            mod = ev.key.keysym.mod
-            self.flush()
-            self.name = SDL_GetKeyName(sym).decode('utf-8').lower()
-            self.mods = set(name for flag, name in modifiers.items() if mod & flag != 0)
-            self.text = None
-
-    def __iter__(self):
-        self.flush()
-        for key in self.pending:
-            yield key
-        self.pending[:] = ()
-
-import keybindings
-
 mode = keybindings.insert
-keyboard = KeyboardStream()
+keyboard = sdl_backend.KeyboardStream()
 event = SDL_Event()
 live = True
 while live:
