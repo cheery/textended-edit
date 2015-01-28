@@ -55,7 +55,7 @@ class Visual(object):
             return obj.rect
 
     def create_sub_editor(self, document):
-        subeditor = Visual(self.images, document)
+        subeditor = Visual(self.env, self.images, document)
         subeditor.width = self.width
         subeditor.height = self.height
         self.children.append(subeditor)
@@ -104,6 +104,7 @@ class Visual(object):
                 self.bridges.extend(layer.driver.link_bridges(primary, layer))
             sectors = []
             for bridge in self.bridges:
+                bridge.mapping.mappings = self.mappings
                 referenced = self.document.nodes.get(bridge.reference)
                 if referenced not in self.mappings:
                     continue
@@ -134,6 +135,5 @@ class Bridge(object):
         self.layer = layer
         self.reference = reference
         self.body = body
-        self.mappings = {}
-        self.mapping = Mapping(self.mappings, body, None)
+        self.mapping = Mapping({}, body, None)
         self.rootbox = None
