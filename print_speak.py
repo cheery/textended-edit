@@ -1,10 +1,11 @@
+#!/usr/bin/env python
 import textended
 import sys
 import pyttsx
 
 engine = pyttsx.init()
-engine.setProperty('rate', 70)
-voices = engine.getProperty('voices')
+engine.setProperty('rate', 100)
+engine.setProperty('voice', 'english')
 
 contents = textended.load(open(sys.argv[1]))
 
@@ -19,7 +20,7 @@ def print_out(node):
         engine.say(node.label + " begin")
         for subnode in node:
             print_out(subnode)
-        engine.say("done")
+        engine.say("end")
 
 for node in contents:
     print_out(node)

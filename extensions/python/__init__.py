@@ -109,7 +109,34 @@ def layout_def(env, name, arglist, body):
             tokens.extend(plaintext(env, " "))
         tokens.extend(arg)
     tokens.extend(plaintext(env, '):', color=env['gray']))
-    hpack(tokens)
+
+    bodylist = []
+    for stmt in body:
+        bodylist.append(Glue(3))
+        bodylist.extend(stmt)
+    yield vpack([
+        hpack(tokens),
+        Padding(vpack(bodylist), (25, 0, 0, 0))])
+
+@semantic(stmt, Group('while', [expr], stmt))
+def layout_whilwhile(env, cond, body):
+    tokens = plaintext(env, 'while ', color=env['blue'])
+    tokens.extend(cond)
+    tokens.extend(plaintext(env, ':', color=env['blue']))
+
+    bodylist = []
+    for stmt in body:
+        bodylist.append(Glue(3))
+        bodylist.extend(stmt)
+    yield vpack([
+        hpack(tokens),
+        Padding(vpack(bodylist), (25, 0, 0, 0))])
+
+@semantic(stmt, Group('if', [expr], stmt))
+def layout_if(env, cond, body):
+    tokens = plaintext(env, 'if ', color=env['blue'])
+    tokens.extend(cond)
+    tokens.extend(plaintext(env, ':', color=env['blue']))
 
     bodylist = []
     for stmt in body:
@@ -122,6 +149,38 @@ def layout_def(env, name, arglist, body):
 @semantic(expr, Group('vararg', [expr]))
 def varg_argument(env, expr):
     yield hpack(plaintext(env, '*', color=env['gray']) + expr)
+
+@semantic(expr, Group('list', [], expr))
+def list_expression(env, exprs):
+    tokens = []
+    for expr in exprs:
+        tokens.append(hpack(expr))
+    yield Padding(
+            vpack(tokens),
+            (5, 0, 0, 0),
+            Patch9('assets/border-left-1px.png'))
+
+@semantic(expr, Group('tuple', [], expr))
+def list_expression(env, exprs):
+    tokens = []
+    for expr in exprs:
+        tokens.append(hpack(expr))
+    yield Padding(
+            vpack(tokens),
+            (5, 0, 0, 0),
+            Patch9('assets/border-left-1px.png'), color=(0, 1, 1, 1))
+
+@semantic(expr, Group('cmp', [expr, Symbol(), expr]))
+def cmp_expr(env, lhs, op, rhs):
+    yield hpack(lhs + plaintext(env, ' ') + op + plaintext(env, ' ') + rhs)
+
+@semantic(expr, Group('infix', [Symbol(), expr]))
+def infix_expr(env, op, rhs):
+    yield hpack(op + plaintext(env, ' ') + rhs)
+
+@semantic(expr, Group('infix', [expr, Symbol(), expr]))
+def infix_expr(env, lhs, op, rhs):
+    yield hpack(lhs + plaintext(env, ' ') + op + plaintext(env, ' ') + rhs)
 
 @semantic(expr, String("float-rgba"))
 def float_rgba_expression(env, hexdec):

@@ -82,10 +82,18 @@ def def_statement(env, name, arglist, statements):
     return env.new_node(ast.FunctionDef,
         as_python_sym(name),
         ast.arguments([
-            ast.Name(as_python_sym(a), ast.Param(), lineno=0, col_offset=0)
+            env.new_node(ast.Name, as_python_sym(a), ast.Param(), lineno=0, col_offset=0)
             for a in arglist[0]], None, None, []),
         statements, 
         [])
+
+@semantic(stmt, Group('if', [expr], stmt))
+def def_statement(env, cond, body):
+    return env.new_node(ast.If, cond, body, [])
+
+@semantic(stmt, Group('while', [expr], stmt))
+def def_statement(env, cond, body):
+    return env.new_node(ast.While, cond, body, [])
 
 @semantic(stmt, Context('expr'))
 def expr_as_statement(env, expr):
@@ -119,6 +127,65 @@ def expr_as_argument(env, expr):
 @semantic(argument, Group('vararg', [expr]))
 def varg_argument(env, expr):
     return ('vararg', expr)
+
+@semantic(expr, Group('cmp', [expr, Symbol(), expr]))
+def cmp_expr(env, lhs, op, rhs):
+    return env.new_node(ast.Compare, lhs, [cmp_operators[op]()], [rhs]) # fix later
+
+@semantic(expr, Group('list', [], expr))
+def varg_argument(env, exprs):
+    return env.new_node(ast.List, exprs, ast.Load())
+
+@semantic(expr, Group('tuple', [], expr))
+def varg_argument(env, exprs):
+    return env.new_node(ast.Tuple, exprs, ast.Load())
+
+cmp_operators = {
+        '==': ast.Eq,
+        '!=': ast.NotEq,
+        '<': ast.Lt,
+        '<=': ast.LtE,
+        '>': ast.Gt,
+        '>=': ast.GtE,
+        'is': ast.Is,
+        'isnot': ast.IsNot,
+        'in': ast.In,
+        'notin': ast.NotIn,
+}
+
+@semantic(expr, Group('infix', [Symbol(), expr]))
+def infix_expr(env, op, rhs):
+    if op not in unary_operators:
+        raise TranslationError(env.subj, expr)
+    return env.new_node(ast.UnaryOp, unary_operators[op](), rhs)
+
+unary_operators = {
+        '+': ast.UAdd,
+        '-': ast.USub,
+        '~': ast.Invert,
+        'not': ast.Not,
+}
+
+@semantic(expr, Group('infix', [expr, Symbol(), expr]))
+def infix_expr(env, lhs, op, rhs):
+    if op not in bin_operators:
+        raise TranslationError(env.subj, expr)
+    return env.new_node(ast.BinOp, lhs, bin_operators[op](), rhs)
+
+bin_operators = {
+        '+': ast.Add,
+        '-': ast.Sub,
+        '*': ast.Mult,
+        '/': ast.Div,
+        '%': ast.Mod,
+        '**': ast.Pow,
+        '<<': ast.LShift,
+        '>>': ast.RShift,
+        '|': ast.BitOr,
+        '^': ast.BitXor,
+        '&': ast.BitAnd,
+        '//': ast.FloorDiv,
+}
 
 @semantic(expr, Group('', [expr], argument))
 def call_expression(env, func, argv):
