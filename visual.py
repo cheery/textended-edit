@@ -34,6 +34,7 @@ class Visual(object):
         self.scroll_y = 0
         self.color = None
         self.background = None
+        self.active = False
 
     @property
     def document(self):
@@ -128,6 +129,17 @@ class Visual(object):
 
         for subvisual in self.children:
             subvisual.update()
+
+    def render(self, width, height):
+        self.compositor.render(self.scroll_x - self.x, self.scroll_y - self.y, width, height)
+        for subeditor in self.children:
+            subeditor.render(width, height)
+
+    def __str__(self):
+        if self.document.name is None:
+            return '[No Name]'
+        else:
+            return self.document.name
 
 class VisualLayer(object):
     def __init__(self, document, driver=defaultlayout):

@@ -20,6 +20,7 @@ from ctypes import c_int, byref, c_char, POINTER, c_void_p
 from sdl2 import *
 from workspace import Workspace
 from visual import Visual, Bridge
+from panels import Panels
 import sdl_backend
 import keybindings
 
@@ -67,6 +68,10 @@ def create_editor(images):
 editor = create_editor(images)
 selection = Selection(editor, Position.bottom(editor.document.body))
 
+panels = Panels(default_env, images, 0, 0, width, height)
+panels.panes.append(editor)
+panels.panes.append(create_editor(images))
+
 glEnable(GL_BLEND)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 flatlayer = renderers.FlatLayer()
@@ -76,18 +81,16 @@ def paint(t):
     glClear(GL_COLOR_BUFFER_BIT)
 
     try:
-        editor.update()
+        panels.update()
         update_cursor(t)
     except:
         traceback.print_exc()
 
     scale = 1.0
-    editor.compositor.render(editor.scroll_x, editor.scroll_y, width/scale, height/scale)
-    for subeditor in editor.children:
-        subeditor.compositor.render(-subeditor.x, -subeditor.y, width/scale, height/scale)
+    panels.render(width, height)
 
     visual = selection.visual
-    flatlayer.render(-visual.x - visual.scroll_x, -visual.y - visual.scroll_y, width/scale, height/scale)
+    flatlayer.render(-visual.x + visual.scroll_x, -visual.y + visual.scroll_y, width/scale, height/scale)
 
 cursor = [0, 0]
 def update_cursor(t):
@@ -159,10 +162,15 @@ def pick(visual, x, y, drag=False):
         for child in visual.children:
             pick(child, x, y, drag)
     else:
-        position = visual.pick(x - visual.x, y - visual.y)
+        position = visual.pick(x - visual.x + visual.scroll_x, y - visual.y + visual.scroll_y)
         if position is not None:
             selection.visual = visual
             selection.set(position, selection.tail if drag else None)
+
+def pick_panels(visual, x, y, drag=False):
+    for pane in panels.panes:
+        if 0 <= x - pane.x < pane.width and 0 <= y - pane.y < pane.height:
+            pick(pane, x, y, drag)
 
 mode = keybindings.insert
 keyboard = sdl_backend.KeyboardStream()
@@ -178,23 +186,22 @@ while live:
                 height = event.window.data2
 
                 glViewport(0, 0, width, height)
-                editor.width = width
-                editor.height = height
-                editor.ver = 0
+                panels.width = width
+                panels.height = height
         elif event.type == SDL_MOUSEMOTION:
             cursor[0] = event.motion.x
             cursor[1] = event.motion.y
             if event.motion.state != 0:
-                pick(editor, cursor[0], cursor[1], True)
+                pick_panels(editor, cursor[0], cursor[1], True)
         elif event.type == SDL_MOUSEBUTTONDOWN:
             cursor[0] = event.motion.x
             cursor[1] = event.motion.y
-            pick(editor, cursor[0], cursor[1], False)
+            pick_panels(editor, cursor[0], cursor[1], False)
         elif event.type == SDL_MOUSEBUTTONUP:
             pass
         elif event.type == SDL_MOUSEWHEEL:
-            editor.scroll_x -= event.wheel.x * 10.0
-            editor.scroll_y -= event.wheel.y * 10.0
+            selection.visual.scroll_x -= event.wheel.x * 10.0
+            selection.visual.scroll_y -= event.wheel.y * 10.0
         else:
             keyboard.push_event(event)
 

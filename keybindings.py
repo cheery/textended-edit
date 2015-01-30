@@ -376,8 +376,8 @@ def node_insert_editor(event):
     def position_hook(editor):
         editor.width = editor.parent.width
         editor.height = editor.inner_height
-        editor.x = 0
-        editor.y = editor.parent.height - editor.height
+        editor.x = editor.parent.x
+        editor.y = editor.parent.y + editor.parent.height - editor.height
     def hook(editor):
         subj.label = editor.document.body[:]
     def close_hook(editor):
