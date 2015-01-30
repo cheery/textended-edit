@@ -70,7 +70,6 @@ selection = Selection(editor, Position.bottom(editor.document.body))
 
 panels = Panels(default_env, images, 0, 0, width, height)
 panels.panes.append(editor)
-panels.panes.append(create_editor(images))
 
 glEnable(GL_BLEND)
 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
