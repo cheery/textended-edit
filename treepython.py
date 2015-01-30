@@ -2,7 +2,7 @@
 import dom, sys, os, ast, imp
 import traceback
 from collections import defaultdict
-from recognizer import Group, String, Symbol, Context
+from recognizer import Group, Binary, String, Symbol, Context
 
 grammar = defaultdict(list)
 
@@ -87,6 +87,10 @@ def def_statement(env, name, arglist, statements):
         statements, 
         [])
 
+@semantic(stmt, Group('global', [], Symbol()))
+def global_statement(env, globs):
+    return env.new_node(ast.Global, map(as_python_sym, globs))
+
 @semantic(stmt, Group('if', [expr], stmt))
 def def_statement(env, cond, body):
     return env.new_node(ast.If, cond, body, [])
@@ -109,6 +113,7 @@ def symbol_expression(env, symbol):
         return env.new_node(ast.Name, as_python_sym(symbol), ast.Load())
 
 @semantic(expr, String(''))
+@semantic(expr, Binary(''))
 def string_expression(env, string):
     return env.new_node(ast.Str, string)
 
