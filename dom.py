@@ -102,37 +102,37 @@ class Node(object):
         return False
 
 class Symbol(Node):
-    def __init__(self, string, ident=''):
-        self.string = string
+    def __init__(self, label, ident=''):
+        self.label = label
         self.ident = ident
 
     def copy(self):
-        return self.__class__(self.string, self.ident)
+        return self.__class__(self.label, self.ident)
 
     def __getitem__(self, index):
-        return self.string[index]
+        return self.label[index]
     
     def __len__(self):
-        return len(self.string)
+        return len(self.label)
 
     def drop(self, start, stop, undo=False):
         start = max(0, min(len(self), start))
         stop = max(0, min(len(self), stop))
-        text = self.string[start:stop]
-        self.string = self.string[:start] + self.string[stop:]
+        text = self.label[start:stop]
+        self.label = self.label[:start] + self.label[stop:]
         if not undo:
             self.document._update(Drop(self, start, text))
         return text
 
     def yank(self, start, stop, undo=False):
-        return self.string[start:stop]
+        return self.label[start:stop]
 
-    def put(self, index, string, undo=False):
+    def put(self, index, label, undo=False):
         index = max(0, min(len(self), index))
-        assert isinstance(string, (str, unicode))
-        self.string = self.string[:index] + string + self.string[index:]
+        assert isinstance(label, (str, unicode))
+        self.label = self.label[:index] + label + self.label[index:]
         if not undo:
-            self.document._update(Put(self, index, string))
+            self.document._update(Put(self, index, label))
 
     def traverse(self):
         yield self
