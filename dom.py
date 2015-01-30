@@ -292,6 +292,6 @@ def save(path, contents):
         delete=False)
     textended.dump(contents, fd, transform_enc)
     fd.flush()
-    os.fdatasync(fd.fileno())
+    #os.fdatasync(fd.fileno())
     fd.close()
     os.rename(fd.name, path)
