@@ -267,7 +267,7 @@ def node_remove(document, node):
 
 def transform_enc(node):
     if isinstance(node, Symbol):
-        return (node.string, None, node.ident)
+        return (node.label, None, node.ident)
     if isinstance(node, Literal):
         return (node.label, node.contents, node.ident)
 
