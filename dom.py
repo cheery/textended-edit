@@ -89,6 +89,9 @@ class Node(object):
     document = None
     parent = None
 
+    def isblank(self):
+        return False
+
     def issymbol(self):
         return False
 
@@ -136,6 +139,9 @@ class Symbol(Node):
 
     def traverse(self):
         yield self
+
+    def isblank(self):
+        return len(self.label) == 0
 
     def issymbol(self):
         return True

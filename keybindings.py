@@ -95,35 +95,123 @@ def insert_space(event):
     selection = event.selection
     if selection.subj.isstring() or selection.subj.isbinary():
         return event.mode.default(event)
-    if selection.subj.issymbol():
-        slit(selection)
+    selection.drop()
+    head = selection.head
+    above = head.above
+    if head.subj.issymbol() and above is not None:
+        newsym = dom.Symbol(head.subj.drop(head.index, len(head.subj)))
+        (above+1).put([newsym])
+        selection.set(Position(newsym, 0))
+    if head.subj.islist():
+        newsym = dom.Symbol(u"")
+        selection.put([newsym])
+        selection.set(Position(newsym, 0))
+
+@insert.text(';')
+def insert_jump_space(event):
+    head = event.selection.head
+    if head.subj.issymbol() and head.above is not None:
+        above = head.above
+        if head.subj.isblank():
+            above.subj.drop(above.index, above.index+1)
+        head = above
+    above = head.above
+    if above is not None:
+        blank = dom.Symbol(u"")
+        (above+1).put([blank])
+        event.selection.set(Position(blank, 0))
+
+@insert.text(':')
+def insert_jump_space(event):
+    head = event.selection.head
+    if head.subj.issymbol() and head.above is not None:
+        above = head.above
+        if head.subj.isblank():
+            above.subj.drop(above.index, above.index+1)
+        head = above
+    above = head.above
+    if above is not None:
+        blank = dom.Symbol(u"")
+        above.put([blank])
+        event.selection.set(Position(blank, 0))
 
 @insert.text(',')
 def insert_capture(event):
     sel = event.selection
-    if sel.head.subj.islist() and sel.tail.index > 0:
+    if sel.tail.subj.islist() and sel.tail.index > 0:
         tail = Position(sel.tail.subj, sel.tail.index-1)
         sel.set(sel.head, tail)
     else:
-        tail = sel.head.above
+        tail = sel.tail.above
         if tail is not None:
-            sel.set(tail+1, tail)
+            sel.set(sel.head, tail)
+
+@insert.text('.')
+def insert_fwd_capture(event):
+    sel = event.selection
+    if sel.tail.subj.islist() and sel.tail.index < len(sel.tail.subj):
+        tail = Position(sel.tail.subj, sel.tail.index+1)
+        sel.set(sel.head, tail)
+    else:
+        tail = sel.tail.above
+        if tail is not None:
+            sel.set(sel.head, tail+1)
 
 @insert.key('backspace')
 @with_transaction
 def insert_backspace(event):
     sel = event.selection
+    above = sel.head.above
     if sel.subj_head == sel.subj_tail and sel.subj_head > 0:
         sel.subj_head -= 1
-    sel.drop()
+        sel.drop()
+    elif sel.head != sel.tail:
+        sel.drop()
+        head = sel.head
+        if head.index > 0:
+            sel.set(Position.bottom(head.subj[head.index-1]))
+    elif len(sel.head.subj) == 0 and above is not None:
+        above.subj.drop(above.index, above.index+1)
+        if above.index > 0:
+            sel.set(Position.bottom(above.subj[above.index-1]))
+        else:
+            sel.set(above)
+    elif sel.head.index == 0 and above is not None and above.index > 0:
+        dropsym = sel.head.subj
+        putsym = above.subj[above.index-1]
+        cutpoint = len(putsym)
+        if dropsym.issymbol() and putsym.issymbol():
+            putsym.put(cutpoint, dropsym.drop(0, len(dropsym)))
+            above.subj.drop(above.index, above.index+1)
+            sel.set(Position(putsym, cutpoint))
 
 @insert.key('delete')
 @with_transaction
-def insert_delete(event):
+def insert_backspace(event):
     sel = event.selection
+    above = sel.head.above
     if sel.subj_head == sel.subj_tail and sel.subj_head < len(sel.subj):
         sel.subj_head += 1
-    sel.drop()
+        sel.drop()
+    elif sel.head != sel.tail:
+        sel.drop()
+        head = sel.head
+        if head.index < len(head.subj):
+            sel.set(Position.top(head.subj[head.index]))
+    elif len(sel.head.subj) == 0 and above is not None:
+        above.subj.drop(above.index, above.index+1)
+        if above.index < len(above.subj):
+            sel.set(Position.top(above.subj[above.index]))
+        else:
+            sel.set(above)
+    elif sel.head.index == len(sel.head.subj) and above is not None and above.index + 1 < len(above.subj):
+        dropsym = sel.head.subj
+        cutpoint = len(dropsym)
+        putsym = above.subj[above.index+1]
+        if dropsym.issymbol() and putsym.issymbol():
+            putsym.put(0, dropsym.drop(0, len(dropsym)))
+            above.subj.drop(above.index, above.index+1)
+            sel.set(Position(putsym, cutpoint))
 
 @insert.text("'")
 @with_transaction
@@ -142,6 +230,10 @@ def insert_string(event):
 
 def insert_new_node(event, mk_subj):
     selection = event.selection
+    if selection.subj.isblank() and selection.subj.parent is not None:
+        above = Position(selection.subj, 0).above
+        above.subj.drop(above.index, above.index+1)
+        selection.set(above)
     if selection.subj.isstring() or selection.subj.isbinary():
         return event.mode.default(event)
     if selection.subj.issymbol():
@@ -178,34 +270,6 @@ def slit(selection):
         else:
             head.subj.put(head.index, [dom.Literal(u"", contents)])
     selection.set(head, head)
-
-@insert.text('(')
-def insert_fall_left(event):
-    fall_before(event.selection)
-
-def fall_before(selection):
-    issymbol = selection.subj.issymbol()
-    parent = selection.subj.parent
-    if parent is None:
-        return
-    pos = parent.index(selection.subj)
-    selection.set(Position(parent, pos))
-    if issymbol:
-        fall_before(selection)
-
-@insert.text(')')
-def insert_fall_right(event):
-    fall_after(event.selection)
-
-def fall_after(selection):
-    issymbol = selection.subj.issymbol()
-    parent = selection.subj.parent
-    if parent is None:
-        return
-    pos = parent.index(selection.subj) + 1
-    selection.set(Position(parent, pos))
-    if issymbol:
-        fall_after(selection)
 
 @insert.key('z', 'ctrl')
 def undo_document(event):

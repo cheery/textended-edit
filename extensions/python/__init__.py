@@ -14,6 +14,8 @@ expr_set = Context('expr=')
 subscript = Context('subscript')
 
 def translate_pattern(mapping, env, pattern):
+    if mapping.subj.isblank():
+        return defaultlayout.layout(mapping, env)
     result = pattern.scan(grammar, mapping.subj)
     if result is None:
         return defaultlayout.layout(mapping, env)

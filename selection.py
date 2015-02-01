@@ -21,6 +21,9 @@ class Position(object):
             node = node[len(node) - 1]
         return cls(node, len(node))
 
+    def put(self, contents):
+        return self.subj.put(self.index, contents)
+
     def __add__(self, number):
         return Position(self.subj, self.index+number)
 

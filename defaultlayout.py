@@ -14,13 +14,19 @@ def link_bridges(primary, layer):
 
 def layout(mapping, env):
     node = mapping.subj
-    if isinstance(node, dom.Symbol):
+    if node.isblank():
+        box = boxmodel.hpack(plaintext(env, "___"))
+        box.depth = 2
+        box.height = 14
+        box.set_subj(mapping.subj, 0)
+        return [box]
+    elif isinstance(node, dom.Symbol):
         sym = env['font'](node, env['fontsize'], color=env['white'])
         if len(node) == 0:
             return [boxmodel.hpack(plaintext(env, "|", color=env['gray']) + sym + plaintext(env, "|", color=env['gray']))]
         else:
             return [boxmodel.hpack(sym)]
-    if isinstance(node.contents, str):
+    elif isinstance(node.contents, str):
         if len(node.label) > 0:
             prefix = env['font'](node.label, env['fontsize'], color=env['blue'])
             prefix += env['font']('#', env['fontsize'], color=env['pink'])
