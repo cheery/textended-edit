@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import treepython
 import sys
 import traceback
