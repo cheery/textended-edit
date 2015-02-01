@@ -3,6 +3,12 @@ class Position(object):
         self.subj = subj
         self.index = index
 
+    @property
+    def above(self):
+        parent = self.subj.parent
+        if parent is not None:
+            return Position(parent, parent.index(self.subj))
+
     @classmethod
     def top(cls, node):
         while node.islist() and len(node) > 0:
@@ -14,6 +20,12 @@ class Position(object):
         while node.islist() and len(node) > 0:
             node = node[len(node) - 1]
         return cls(node, len(node))
+
+    def __add__(self, number):
+        return Position(self.subj, self.index+number)
+
+    def __sub__(self, number):
+        return Position(self.subj, self.index-number)
 
     def __eq__(self, other):
         return self.subj is other.subj and self.index == other.index

@@ -98,6 +98,17 @@ def insert_space(event):
     if selection.subj.issymbol():
         slit(selection)
 
+@insert.text(',')
+def insert_capture(event):
+    sel = event.selection
+    if sel.head.subj.islist() and sel.tail.index > 0:
+        tail = Position(sel.tail.subj, sel.tail.index-1)
+        sel.set(sel.head, tail)
+    else:
+        tail = sel.head.above
+        if tail is not None:
+            sel.set(tail+1, tail)
+
 @insert.key('backspace')
 @with_transaction
 def insert_backspace(event):
@@ -135,7 +146,11 @@ def insert_new_node(event, mk_subj):
         return event.mode.default(event)
     if selection.subj.issymbol():
         slit(selection)
-    new_subj = dom.Literal(u"", mk_subj())
+    if mk_subj is list and selection.subj.islist() and selection.subj_head != selection.subj_tail:
+        sequence = selection.drop()
+        new_subj = dom.Literal(u"", mk_subj(sequence))
+    else:
+        new_subj = dom.Literal(u"", mk_subj())
     selection.put([new_subj])
     selection.set(Position(new_subj, 0))
 
@@ -254,10 +269,10 @@ def insert_left(event):
         if head.subj.islist():
             head = Position.bottom(head.subj[head.index-1])
         else:
-            head.index -= 1
+            head -= 1
     else:
         head = fall_left_leaf(head.subj)
-    event.selection.set(head, head)
+    event.selection.set(head, event.selection.tail if 'shift' in event.mods else head)
 
 def fall_left_leaf(node):
     if node.parent is None:
@@ -275,10 +290,10 @@ def insert_right(event):
         if head.subj.islist():
             head = Position.top(head.subj[head.index])
         else:
-            head.index += 1
+            head += 1
     else:
         head = fall_right_leaf(head.subj)
-    event.selection.set(head, head)
+    event.selection.set(head, event.selection.tail if 'shift' in event.mods else None)
 
 def fall_right_leaf(node):
     if node.parent is None:
@@ -291,13 +306,13 @@ def fall_right_leaf(node):
 
 @insert.key('up')
 def insert_up(event):
-    navigate(event.selection.visual, event.selection, hcarets_above)
+    navigate(event.selection.visual, event.selection, hcarets_above, 'shift' in event.mods)
 
 @insert.key('down')
 def insert_down(event):
-    navigate(event.selection.visual, event.selection, hcarets_below)
+    navigate(event.selection.visual, event.selection, hcarets_below, 'shift' in event.mods)
 
-def navigate(editor, sel, hcarets_fn):
+def navigate(editor, sel, hcarets_fn, drag):
     caret = find_caret(editor, sel.head.subj, sel.head.index)
     if caret is None:
         return
@@ -313,7 +328,7 @@ def navigate(editor, sel, hcarets_fn):
     except ValueError as v:
         return
     else:
-        sel.set(Position(node.subj, node.index))
+        sel.set(Position(node.subj, node.index), sel.tail if drag else None)
 
 def find_caret(editor, subj, index):
     for frame in editor.rootbox.traverse():
@@ -362,6 +377,11 @@ def node_insert_editor(event):
         subj = sel.subj
     if subj is None:
         return
+
+    if sel.subj_head != sel.subj_tail:
+        sequence = sel.drop()
+        subj = dom.Literal(u"", sequence)
+        sel.put([subj])
 
     cache_head, cache_tail = sel.head, sel.tail
 
