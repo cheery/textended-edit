@@ -87,6 +87,14 @@ def layout_import(env, aliases):
         tokens.extend(alias)
     yield hpack(tokens)
 
+@semantic(stmt, Group('global', [], alias))
+def layout_import(env, aliases):
+    tokens = plaintext(env, 'global', color=env['blue'])
+    for alias in aliases:
+        tokens.extend(plaintext(env, ' '))
+        tokens.extend(alias)
+    yield hpack(tokens)
+
 @semantic(stmt, Group('from-import', [Symbol()], alias))
 def layout_import(env, name, aliases):
     tokens = plaintext(env, 'from ', color=env['blue'])
