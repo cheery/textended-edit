@@ -137,16 +137,16 @@ def insert_jump_space(event):
 
 @insert.text(',')
 def insert_capture(event):
+    selection = event.selection
     if selection.subj.isstring() or selection.subj.isbinary():
         return event.mode.default(event)
-    sel = event.selection
-    if sel.tail.subj.islist() and sel.tail.index > 0:
-        tail = Position(sel.tail.subj, sel.tail.index-1)
-        sel.set(sel.head, tail)
+    if selection.tail.subj.islist() and selection.tail.index > 0:
+        tail = Position(selection.tail.subj, selection.tail.index-1)
+        selection.set(selection.head, tail)
     else:
-        tail = sel.tail.above
+        tail = selection.tail.above
         if tail is not None:
-            sel.set(sel.head, tail)
+            selection.set(selection.head, tail)
 
 #@insert.text('.')
 #def insert_fwd_capture(event):
