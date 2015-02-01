@@ -121,22 +121,24 @@ def insert_jump_space(event):
         (above+1).put([blank])
         event.selection.set(Position(blank, 0))
 
-@insert.text(':')
-def insert_jump_space(event):
-    head = event.selection.head
-    if head.subj.issymbol() and head.above is not None:
-        above = head.above
-        if head.subj.isblank():
-            above.subj.drop(above.index, above.index+1)
-        head = above
-    above = head.above
-    if above is not None:
-        blank = dom.Symbol(u"")
-        above.put([blank])
-        event.selection.set(Position(blank, 0))
+#@insert.text(':')
+#def insert_jump_space(event):
+#    head = event.selection.head
+#    if head.subj.issymbol() and head.above is not None:
+#        above = head.above
+#        if head.subj.isblank():
+#            above.subj.drop(above.index, above.index+1)
+#        head = above
+#    above = head.above
+#    if above is not None:
+#        blank = dom.Symbol(u"")
+#        above.put([blank])
+#        event.selection.set(Position(blank, 0))
 
 @insert.text(',')
 def insert_capture(event):
+    if selection.subj.isstring() or selection.subj.isbinary():
+        return event.mode.default(event)
     sel = event.selection
     if sel.tail.subj.islist() and sel.tail.index > 0:
         tail = Position(sel.tail.subj, sel.tail.index-1)
@@ -146,16 +148,16 @@ def insert_capture(event):
         if tail is not None:
             sel.set(sel.head, tail)
 
-@insert.text('.')
-def insert_fwd_capture(event):
-    sel = event.selection
-    if sel.tail.subj.islist() and sel.tail.index < len(sel.tail.subj):
-        tail = Position(sel.tail.subj, sel.tail.index+1)
-        sel.set(sel.head, tail)
-    else:
-        tail = sel.tail.above
-        if tail is not None:
-            sel.set(sel.head, tail+1)
+#@insert.text('.')
+#def insert_fwd_capture(event):
+#    sel = event.selection
+#    if sel.tail.subj.islist() and sel.tail.index < len(sel.tail.subj):
+#        tail = Position(sel.tail.subj, sel.tail.index+1)
+#        sel.set(sel.head, tail)
+#    else:
+#        tail = sel.tail.above
+#        if tail is not None:
+#            sel.set(sel.head, tail+1)
 
 @insert.key('backspace')
 @with_transaction
