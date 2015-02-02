@@ -1,5 +1,5 @@
 import renderers
-import defaultlayout
+#import defaultlayout
 import boxmodel
 
 class Compositor(object):
@@ -46,6 +46,8 @@ class Compositor(object):
                     node.quad = x+node.offset, subj.quad[1], x+node.offset+node.computed, subj.quad[3]
                     if self.debug:
                         self.imglayer.quad(node.quad, self.imglayer.texcoords(None), (0.0, 1.0, 0.0, 0.2))
+                        if node.subj is not None:
+                            self.imglayer.quad((node.quad[0]-1, y-1, node.quad[0]+1, y+1), self.imglayer.texcoords(None), (1.0, 0.0, 0.0, 1.0))
                 else:
                     self.compose(node, x+node.offset, y+node.shift)
         elif isinstance(subj, boxmodel.VBox):
@@ -55,6 +57,8 @@ class Compositor(object):
                     node.quad = subj.quad[0], y+node.offset, subj.quad[2], y+node.offset+node.computed
                     if self.debug:
                         self.imglayer.quad(node.quad, self.imglayer.texcoords(None), (1.0, 1.0, 0.0, 0.2))
+                        if node.subj is not None:
+                            self.imglayer.quad((x-1, node.quad[1]-1, x+1, node.quad[1]+1), self.imglayer.texcoords(None), (1.0, 0.0, 0.0, 1.0))
                 else:
                     self.compose(node, x + node.shift, y + node.offset)
         elif isinstance(subj, boxmodel.Padding):
