@@ -305,6 +305,10 @@ def paste_document(event):
     copybuf = event.workspace.copybuf
     document = event.selection.document
     if copybuf is not None:
+        if sel.subj.isblank() and sel.head.above is not None:
+            above = sel.head.above
+            above.subj.drop(above.index, above.index+1)
+            sel.set(above)
         if sel.subj.islist() and isinstance(copybuf, list):
             sel.put([node.copy() for node in copybuf])
         elif sel.subj.issymbol() and isinstance(copybuf, unicode):
