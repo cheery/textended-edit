@@ -14,7 +14,11 @@ class Document(object):
         start = clamp(start, 0, len(self))
         stop = clamp(stop, 0, len(self))
         contents = self.contents[start:stop]
-        self.contents = self.contents[:start] + self.contents[stop:]
+        blanks = []
+        for node in contents:
+            blanks.extend(node.detach(start, stop))
+        self.contents = self.contents[:start] + blanks + self.contents[stop:]
+
         for i, node in enumerate(self.contents):
             node.index = i
         return contents
@@ -52,6 +56,29 @@ class Group(Node):
     def __len__(self):
         return len(self.contents)
 
+    @property
+    def left(self):
+        return self.contents[0].left
+
+    @property
+    def right(self):
+        return self.contents[-1].right
+
+    def detach(self, start, stop, item):
+        if start <= self.left and self.right < stop:
+            if self.parent is None:
+                return []
+            else:
+                return self.parent.detach(start, stop, self)
+        else:
+            blank = Symbol(u"")
+            index = self.contents.index(item)
+            self.contents[index] = blank
+            item.parent = None
+            blank.parent = self
+            return [blank]
+
+
 class Symbol(Node):
     def __init__(self, string):
         self.string = string
@@ -62,6 +89,12 @@ class Symbol(Node):
 
     def __len__(self):
         return len(self.string)
+
+    def detach(self, start, stop):
+        if self.parent is None:
+            return []
+        else:
+            return self.parent.detach(start, stop, self)
 
     def drop(self, start, stop):
         start = clamp(start, 0, len(self))
@@ -77,6 +110,14 @@ class Symbol(Node):
         assert isinstance(string, (str, unicode))
         index = clamp(index, 0, len(self))
         self.string = self.string[:index] + string + self.string[index:]
+
+    @property
+    def left(self):
+        return self.index
+
+    @property
+    def right(self):
+        return self.index
 
 def clamp(x, low, high):
     return min(max(x, low), high)

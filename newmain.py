@@ -100,7 +100,9 @@ def main(respond):
                     back.debug = not back.debug
                     middle.debug = not middle.debug
                     front.debug = not front.debug
-                if key == 'space':
+                if key == 'backspace':
+                    document.drop(head.pos, head.pos+1)
+                elif key == 'space':
                     symbol = document[head.pos]
                     document.put(head.pos+1, [Symbol(symbol.drop(head.index, len(symbol)))])
                     head = Position(head.pos+1, 0)
