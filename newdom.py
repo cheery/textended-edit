@@ -1,6 +1,8 @@
 class Document(object):
     def __init__(self, contents):
         self.contents = contents
+        for i, node in enumerate(contents):
+            node.index = i
 
     def __getitem__(self, index):
         return self.contents[index]
@@ -13,6 +15,8 @@ class Document(object):
         stop = clamp(stop, 0, len(self))
         contents = self.contents[start:stop]
         self.contents = self.contents[:start] + self.contents[stop:]
+        for i, node in enumerate(self.contents):
+            node.index = i
         return contents
 
     def yank(self, start, stop):
@@ -22,10 +26,36 @@ class Document(object):
         assert isinstance(contents, list)
         index = clamp(index, 0, len(self))
         self.contents = self.contents[:index] + contents + self.contents[index:]
+        for i, node in enumerate(self.contents):
+            node.index = i
 
-class Symbol(object):
+class Node(object):
+    parent = None
+
+    @property
+    def root(self):
+        root = self
+        while root.parent is not None:
+            root = root.parent
+        return root
+
+class Group(Node):
+    def __init__(self, schema, contents):
+        self.schema = schema
+        self.contents = contents
+        for node in contents:
+            node.parent = self
+
+    def __getitem__(self, index):
+        return self.contents[index]
+
+    def __len__(self):
+        return len(self.contents)
+
+class Symbol(Node):
     def __init__(self, string):
         self.string = string
+        self.index = None
 
     def __getitem__(self, index):
         return self.string[index]

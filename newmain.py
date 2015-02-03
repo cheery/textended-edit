@@ -1,7 +1,7 @@
 from boxmodel import *
 from compositor import Compositor
 from ctypes import c_int, byref, c_char, POINTER, c_void_p
-from newdom import Document, Symbol
+from newdom import Document, Group, Symbol
 from math import sin, cos
 from OpenGL.GL import *
 from sdl2 import *
@@ -25,7 +25,7 @@ class Position(object):
         return cmp((self.pos, self.index), (other.pos, other.index))
 
 def init():
-    global window, context, images, middle, front, document, env, head, tail
+    global window, context, images, back, middle, front, document, env, head, tail
     SDL_Init(SDL_INIT_VIDEO)
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)
     window = SDL_CreateWindow(b"textended-edit",
@@ -38,13 +38,22 @@ def init():
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
+    back = Compositor(images)
     middle = Compositor(images)
     front = Compositor(images)
 
-    document = Document([
-        Symbol("Hello"),
-        Symbol("World")
-    ])
+
+    s0 = Symbol("")
+    s1 = Symbol("")
+    s5 = Symbol("")
+    s2 = Symbol("")
+    s3 = Symbol("")
+    document = Document([s0, s1, s5, s2, s3])
+
+    Group('xor', [s1, s5])
+    a2 = Group('and', [s0, s2])
+    a3 = Group('or', [a2, s3])
+
     env = Object(
         background=(0x27/255.0, 0x28/255.0, 0x22/255.0, 1), #272822
         white=(1.0, 1.0, 1.0, 1.0),
@@ -59,7 +68,7 @@ def init():
     tail = Position(len(document)-1, len(document[-1]))
 
 def main(respond):
-    global head
+    global head, tail
     keyboard = sdl_backend.KeyboardStream()
     event = SDL_Event()
     running = True
@@ -83,17 +92,24 @@ def main(respond):
                 print key, mod, text
                 if key == 'escape':
                     sys.exit(0)
+                if key == 'f10':
+                    syms = [Symbol(""), Symbol("")]
+                    Group("+test+", syms)
+                    document.put(head.pos+1, syms)
                 if key == 'f12':
+                    back.debug = not back.debug
                     middle.debug = not middle.debug
                     front.debug = not front.debug
                 if key == 'space':
                     symbol = document[head.pos]
                     document.put(head.pos+1, [Symbol(symbol.drop(head.index, len(symbol)))])
                     head = Position(head.pos+1, 0)
+                    tail = head
                 elif text is not None:
                     symbol = document[head.pos]
                     symbol.put(head.index, text)
                     head = Position(head.pos, head.index + len(text))
+                    tail = head
             except Exception:
                 traceback.print_exc()
         paint(time.time())
@@ -123,11 +139,12 @@ def paint(t):
     glViewport(0, 0, width, height)
     glClearColor(*env.background)
     glClear(GL_COLOR_BUFFER_BIT)
+    back.clear()
     middle.clear()
     front.clear()
 
-    rootbox = layout(document)
-    middle.compose(rootbox, 10, 50)
+    rootbox = layout(document, 0, len(document))
+    back.compose(rootbox, 10, 50)
 
     start = min(head, tail)
     stop = max(head, tail)
@@ -144,23 +161,61 @@ def paint(t):
             elif start.pos <= pos <= stop.pos:
                 front.decor(subbox.quad, None, (1, 0, 0, 0.5))
 
+    back.render(0, 0, width, height)
     middle.render(0, 0, width, height)
     front.render(0, 0, width, height)
 
-def layout(document):
+def layout(document, start, stop):
     tokens = []
-    for node in document:
+    ctx = Object(document=document, index=start)
+    while ctx.index < stop:
         if len(tokens) > 0:
             tokens.extend(env.font(' ', env.fontsize))
-        if isinstance(node, Symbol) and len(node) == 0:
-            box = hpack(env.font("___", env.fontsize, color=env.blue))
-            box.depth = env.fontsize * (1.0/3.0)
-            box.height = env.fontsize - box.depth
-            box.set_subj(node, 0)
-            tokens.extend([box])
+        node = document[ctx.index]
+        tokens.extend(layout_node(node.root, ctx))
+    return hpack(tokens)
+
+def layout_node(node, ctx):
+    if isinstance(node, Symbol):
+        if ctx.index < node.index:
+            start, stop = ctx.index, node.index
+            outbox = wrap_outbox(document, ctx.index, node.index)
         else:
-            tokens.extend(env.font(node, env.fontsize))
-    return hpack(tokens + env.font(" [flat]", env.fontsize, color=env.blue))
+            outbox = lambda b: b
+        ctx.index = node.index + 1
+    if isinstance(node, Group):
+        tokens = []
+        for subnode in node:
+            if len(tokens) > 0:
+                tokens.extend(env.font(' {} '.format(node.schema), env.fontsize, color=env.blue))
+            tokens.append(hpack(layout_node(subnode, ctx)))
+        return [hpack(tokens)]
+    elif isinstance(node, Symbol) and len(node) == 0:
+        box = hpack(env.font("___", env.fontsize, color=env.blue))
+        box.depth = env.fontsize * (1.0/3.0)
+        box.height = env.fontsize - box.depth
+        box.set_subj(node, 0)
+        return outbox([box])
+    else:
+        return outbox([hpack(env.font(node, env.fontsize))])
+
+def wrap_outbox(document, start, stop):
+    outbox = layout(document, start, stop)
+    def _impl_(tokens):
+        block = hpack([ImageBox(5, 20, 5, None, color=(1, 1, 1, 0.1)), Glue(4)] + tokens)
+        vbox = vpack([Padding(outbox, (5, 5, 5, 5), color=(1, 1, 1, 0.1)), Glue(0), block])
+        vsize = vbox.vsize
+        vbox.depth = block.depth
+        vbox.height = vsize - vbox.depth
+        vbox.width = block.width
+        return [vbox]
+    return _impl_
+
+
+def hinted(seq, hint):
+    for item in seq:
+        item.hint = hint
+    return seq
 
 def clamp(x, low, high):
     return min(max(x, low), high)
