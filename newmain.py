@@ -121,22 +121,23 @@ def pick(x, y, drag=False):
     global head, tail
     nearest = None
     distance = 500**4
-    for subbox in rootbox.traverse():
-        if subbox.subj is not None:
-            x0, y0, x1, y1 = subbox.quad
-            dx = clamp(x, x0, x1) - x
-            dy = clamp(y, y0, y1) - y
-            d = dx**4 + dy**2
-            if d < distance:
-                distance = d
-                nearest = subbox
+    for rootbox in rootboxes:
+        for subbox in rootbox.traverse():
+            if subbox.subj is not None:
+                x0, y0, x1, y1 = subbox.quad
+                dx = clamp(x, x0, x1) - x
+                dy = clamp(y, y0, y1) - y
+                d = dx**4 + dy**2
+                if d < distance:
+                    distance = d
+                    nearest = subbox
     if nearest is not None:
         head = Position(document.contents.index(nearest.subj), nearest.index)
         if not drag:
             tail = head
 
 def paint(t):
-    global rootbox
+    global rootboxes
     width, height = get_window_size()
     glViewport(0, 0, width, height)
     glClearColor(*env.background)
@@ -145,23 +146,32 @@ def paint(t):
     middle.clear()
     front.clear()
 
-    rootbox = layout(document, 0, len(document))
-    back.compose(rootbox, 10, 50)
+
+    main, outboxes = layout(document, 0, len(document))
+    rootboxes = [main]
+    back.compose(main, 10, 50)
+    min_y = 10
+    for anchor, outbox in outboxes:
+        y = max(anchor.quad[1], min_y)
+        back.compose(outbox, max(200, int(main.quad[2])+10), int(y))
+        rootboxes.append(outbox)
+        min_y = outbox.quad[3] + 10
 
     start = min(head, tail)
     stop = max(head, tail)
-    for subbox in rootbox.traverse():
-        if subbox.subj is document[head.pos] and subbox.index == head.index:
-            x0, y0, x1, y1 = subbox.quad
-            front.decor((x0, y0, x0+2, y1), None, (1, 0, 0, 1))
+    for rootbox in rootboxes:
+        for subbox in rootbox.traverse():
+            if subbox.subj is document[head.pos] and subbox.index == head.index:
+                x0, y0, x1, y1 = subbox.quad
+                front.decor((x0, y0, x0+2, y1), None, (1, 0, 0, 1))
 
-        if subbox.subj is not None:
-            pos = document.contents.index(subbox.subj)
-            if start.pos == stop.pos == pos:
-                if start.index < subbox.index < stop.index:
-                    front.decor(subbox.quad, None, (1, 0, 0, 0.5))
-            elif start.pos <= pos <= stop.pos:
-                front.decor(subbox.quad, None, (1, 0, 0, 0.5))
+            if subbox.subj is not None:
+                pos = document.contents.index(subbox.subj)
+                if start.pos == stop.pos == pos:
+                    if start.index <= subbox.index < stop.index:
+                        front.decor(subbox.quad, None, (1, 0, 0, 0.25))
+                elif start.pos <= pos <= stop.pos:
+                    front.decor(subbox.quad, None, (1, 0, 0, 0.25))
 
     back.render(0, 0, width, height)
     middle.render(0, 0, width, height)
@@ -169,22 +179,30 @@ def paint(t):
 
 def layout(document, start, stop):
     tokens = []
-    ctx = Object(document=document, index=start)
+    ctx = Object(document=document, index=start, outboxes=[])
     while ctx.index < stop:
         if len(tokens) > 0:
             tokens.extend(env.font(' ', env.fontsize))
         node = document[ctx.index]
         tokens.extend(layout_node(node.root, ctx))
-    return hpack(tokens)
+    return vpack(tokens), ctx.outboxes
 
 def layout_node(node, ctx):
     if isinstance(node, Symbol):
-        if ctx.index < node.index:
-            start, stop = ctx.index, node.index
-            outbox = wrap_outbox(document, ctx.index, node.index)
-        else:
-            outbox = lambda b: b
+        start, stop = ctx.index, node.index
         ctx.index = node.index + 1
+        if start < stop:
+            anchor = ImageBox(5, 5, 0, None, color=(1, 1, 1, 1))
+            main, outboxes = layout(document, start, stop)
+            main = Padding(main, (5, 5, 5, 5), Patch9("assets/border-1px.png"), color=(1, 1, 1, 1))
+            ctx.outboxes.append((anchor, main))
+            ctx.outboxes.extend(outboxes)
+            tokens = [anchor, Glue(5)] + layout_node2(node, ctx)
+            return tokens
+
+    return layout_node2(node, ctx)
+
+def layout_node2(node, ctx):
     if isinstance(node, Group):
         tokens = []
         for subnode in node:
@@ -197,27 +215,26 @@ def layout_node(node, ctx):
         box.depth = env.fontsize * (1.0/3.0)
         box.height = env.fontsize - box.depth
         box.set_subj(node, 0)
-        return outbox([box])
+        return ([box])
     else:
-        return outbox([hpack(env.font(node, env.fontsize))])
+        return ([hpack(env.font(node, env.fontsize))])
 
-def wrap_outbox(document, start, stop):
-    outbox = layout(document, start, stop)
-    def _impl_(tokens):
-        block = hpack([ImageBox(5, 20, 5, None, color=(1, 1, 1, 0.1)), Glue(4)] + tokens)
-        vbox = vpack([Padding(outbox, (5, 5, 5, 5), color=(1, 1, 1, 0.1)), Glue(0), block])
-        vsize = vbox.vsize
-        vbox.depth = block.depth
-        vbox.height = vsize - vbox.depth
-        vbox.width = block.width
-        return [vbox]
-    return _impl_
+#def wrap_outbox(document, start, stop):
+#    outbox = layout(document, start, stop)
+#    def _impl_(tokens):
+#        block = hpack([ImageBox(5, 20, 5, None, color=(1, 1, 1, 0.1)), Glue(4)] + tokens)
+#        vbox = vpack([Padding(outbox, (5, 5, 5, 5), color=(1, 1, 1, 0.1)), Glue(0), block])
+#        vsize = vbox.vsize
+#        vbox.depth = block.depth
+#        vbox.height = vsize - vbox.depth
+#        vbox.width = block.width
+#        return [vbox]
+#    return _impl_
 
-
-def hinted(seq, hint):
-    for item in seq:
-        item.hint = hint
-    return seq
+#def hinted(seq, hint):
+#    for item in seq:
+#        item.hint = hint
+#    return seq
 
 def clamp(x, low, high):
     return min(max(x, low), high)
