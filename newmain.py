@@ -48,6 +48,44 @@ def do_drop(document, head, tail):
         else:
             return Position(start.pos, 0)
 
+def expand_selection(document, head, tail):
+    start = min(head, tail)
+    stop = max(head, tail)
+    major = document[start.pos]
+    while major.parent is not None and start.pos <= major.left and major.right <= stop.pos:
+        major = major.parent
+    return Position(major.left, 0), Position(major.right, 0)
+
+def trim_plant(document, head, tail):
+    start = min(head, tail)
+    stop = max(head, tail)
+    major = document[start.pos]
+    target = major
+    while start.pos <= major.left and major.right <= stop.pos:
+        target = major
+        if major.parent is None:
+            break
+        major = major.parent
+    start = target.left
+    stop = target.right+1
+    if target.parent is not None:
+        document.put(start+1, document.drop(start, stop))
+        return Position(start+1, 0)
+    block = document.drop(start, stop)
+    return plant(document, start-1, target, block)
+
+def plant(document, pos, root, block):
+    while pos >= 0:
+        if len(document[pos]) == 0 and document[pos].parent is not None:
+            break
+        pos -= 1
+    if pos < 0:
+        document.put(0, block)
+        return Position(0, 0)
+    else:
+        document[pos].parent.plant(document, document[pos], root, block)
+        return Position(pos, 0)
+
 def init():
     global window, context, images, back, middle, front, document, env, head, tail
     SDL_Init(SDL_INIT_VIDEO)
@@ -120,10 +158,14 @@ def main(respond):
                     syms = [Symbol(""), Symbol("")]
                     Group("+test+", syms)
                     document.put(head.pos+1, syms)
+                if key == 'tab':
+                    head = tail = trim_plant(document, head, tail)
                 if key == 'f12':
                     back.debug = not back.debug
                     middle.debug = not middle.debug
                     front.debug = not front.debug
+                if key == 'a' and 'ctrl' in mod:
+                    head, tail = expand_selection(document, head, tail)
                 if key == 'backspace':
                     head = tail = do_drop(document, head, tail)
                 elif key == 'space':

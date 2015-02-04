@@ -78,6 +78,13 @@ class Group(Node):
             blank.parent = self
             return [blank]
 
+    def plant(self, document, place, root, block):
+        self.contents[self.contents.index(place)] = root
+        root.parent = self
+        place.parent = None
+        index = place.index
+        document.drop(index, index+1)
+        document.put(index, block)
 
 class Symbol(Node):
     def __init__(self, string):
