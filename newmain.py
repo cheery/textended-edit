@@ -24,6 +24,30 @@ class Position(object):
     def __cmp__(self, other):
         return cmp((self.pos, self.index), (other.pos, other.index))
 
+def do_drop(document, head, tail):
+    start = min(head, tail)
+    stop = max(head, tail)
+    if start.pos == stop.pos > 0 and start.index == 0:
+        left = document[start.pos-1]
+        right = document[start.pos]
+        cutpoint = len(left)
+        left.put(cutpoint, right.drop(0, len(right)))
+        document.drop(start.pos, start.pos+1)
+        return Position(start.pos - 1, cutpoint)
+    elif start.pos == stop.pos and len(document[start.pos]) > 0:
+        x = start.index == stop.index
+        document[start.pos].drop(start.index - x, stop.index)
+        return Position(start.pos, start.index - x)
+    else:
+        document.drop(start.pos, stop.pos+1)
+        if start.pos > 0:
+            return Position(start.pos - 1, len(document[start.pos]))
+        elif len(document) == 0:
+            document.put(0, [Symbol(u"")])
+            return Position(0, 0)
+        else:
+            return Position(start.pos, 0)
+
 def init():
     global window, context, images, back, middle, front, document, env, head, tail
     SDL_Init(SDL_INIT_VIDEO)
@@ -101,7 +125,7 @@ def main(respond):
                     middle.debug = not middle.debug
                     front.debug = not front.debug
                 if key == 'backspace':
-                    document.drop(head.pos, head.pos+1)
+                    head = tail = do_drop(document, head, tail)
                 elif key == 'space':
                     symbol = document[head.pos]
                     document.put(head.pos+1, [Symbol(symbol.drop(head.index, len(symbol)))])
@@ -153,7 +177,7 @@ def paint(t):
     min_y = 10
     for anchor, outbox in outboxes:
         y = max(anchor.quad[1], min_y)
-        back.compose(outbox, max(200, int(main.quad[2])+10), int(y))
+        back.compose(outbox, max(320, int(main.quad[2])+10), int(y))
         rootboxes.append(outbox)
         min_y = outbox.quad[3] + 10
 
@@ -179,7 +203,7 @@ def paint(t):
 
 def layout(document, start, stop):
     tokens = []
-    ctx = Object(document=document, index=start, outboxes=[])
+    ctx = Object(document=document, index=start, outboxes=[], boundary=None)
     while ctx.index < stop:
         if len(tokens) > 0:
             tokens.extend(env.font(' ', env.fontsize))
@@ -189,17 +213,23 @@ def layout(document, start, stop):
 
 def layout_node(node, ctx):
     if isinstance(node, Symbol):
-        start, stop = ctx.index, node.index
-        ctx.index = node.index + 1
-        if start < stop:
-            anchor = ImageBox(5, 5, 0, None, color=(1, 1, 1, 1))
-            main, outboxes = layout(document, start, stop)
+        if ctx.boundary is not None:
+            anchor, start = ctx.boundary
+            assert start < node.index
+            main, outboxes = layout(document, start, node.index)
             main = Padding(main, (5, 5, 5, 5), Patch9("assets/border-1px.png"), color=(1, 1, 1, 1))
             ctx.outboxes.append((anchor, main))
             ctx.outboxes.extend(outboxes)
-            tokens = [anchor, Glue(5)] + layout_node2(node, ctx)
-            return tokens
-
+            ctx.boundary = None
+        start = node.index + 1
+        root = node.root
+        if start <= root.right:
+            next = ctx.document[start]
+            if root is not next.root:
+                anchor = ImageBox(5, 5, 0, None, color=(1, 1, 1, 1))
+                ctx.boundary = anchor, start
+                return layout_node2(node, ctx) + [Glue(2), anchor, Glue(2)]
+        ctx.index = node.index + 1
     return layout_node2(node, ctx)
 
 def layout_node2(node, ctx):
