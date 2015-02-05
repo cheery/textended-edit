@@ -1,3 +1,5 @@
+import schema
+
 class Document(object):
     def __init__(self, contents):
         self.contents = contents
@@ -44,8 +46,9 @@ class Node(object):
         return root
 
 class Group(Node):
-    def __init__(self, schema, contents):
-        self.schema = schema
+    def __init__(self, rule, contents):
+        assert isinstance(rule, schema.Rule) and len(contents) == len(rule.slots)
+        self.rule = rule
         self.contents = contents
         for node in contents:
             node.parent = self

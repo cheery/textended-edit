@@ -5,11 +5,24 @@ from newdom import Document, Group, Symbol
 from math import sin, cos
 from OpenGL.GL import *
 from sdl2 import *
+import earley
 import font
 import sdl_backend
 import time
 import traceback
+import schema
 import sys
+
+c_expr = schema.Context('expr')
+c_sym = schema.Symbol()
+r_and = schema.Rule('and', [c_expr, c_expr])
+r_or = schema.Rule('or', [c_expr, c_expr])
+r_xor = schema.Rule('xor', [c_expr, c_expr])
+r_test = schema.Rule('test', [c_expr, c_expr])
+
+c_expr.accept.update([
+    r_and, r_or, r_xor, r_test, c_sym
+])
 
 class Object(object):
     def __init__(self, **kw):
@@ -55,6 +68,29 @@ def expand_selection(document, head, tail):
     while major.parent is not None and start.pos <= major.left and major.right <= stop.pos:
         major = major.parent
     return Position(major.left, 0), Position(major.right, 0)
+
+def forestify(document, head, tail):
+    start = min(head, tail)
+    stop = max(head, tail)
+    index = start.pos
+    forest = []
+    while index <= stop.pos:
+        node = document[index]
+        while node.parent and node.parent.left == index and node.parent.right <= stop.pos:
+            node = node.parent
+        index = node.right + 1
+        forest.append(node)
+    return forest
+
+def assemble(result):
+    values = []
+    for node in result.values:
+        if isinstance(node, earley.Result):
+            values.append(assemble(node))
+        else:
+            assert node.parent is None
+            values.append(node)
+    return Group(result.rule, values)
 
 def trim_plant(document, head, tail):
     start = min(head, tail)
@@ -112,9 +148,9 @@ def init():
     s3 = Symbol("")
     document = Document([s0, s1, s5, s2, s3])
 
-    Group('xor', [s1, s5])
-    a2 = Group('and', [s0, s2])
-    a3 = Group('or', [a2, s3])
+    Group(r_xor, [s1, s5])
+    a2 = Group(r_and, [s0, s2])
+    a3 = Group(r_or, [a2, s3])
 
     env = Object(
         background=(0x27/255.0, 0x28/255.0, 0x22/255.0, 1), #272822
@@ -151,12 +187,12 @@ def main(respond):
                 keyboard.push_event(event)
         for key, mod, text in keyboard:
             try:
-                print key, mod, text
+                #print key, mod, text
                 if key == 'escape':
                     sys.exit(0)
                 if key == 'f10':
                     syms = [Symbol(""), Symbol("")]
-                    Group("+test+", syms)
+                    Group(r_test, syms)
                     document.put(head.pos+1, syms)
                 if key == 'tab':
                     head = tail = trim_plant(document, head, tail)
@@ -166,6 +202,15 @@ def main(respond):
                     front.debug = not front.debug
                 if key == 'a' and 'ctrl' in mod:
                     head, tail = expand_selection(document, head, tail)
+                if key == 'f' and 'ctrl' in mod:
+                    print forestify(document, head, tail)
+                if key == 'e' and 'ctrl' in mod:
+                    print earley.parse(forestify(document, head, tail), c_expr.rules)
+                if key == 'i' and 'ctrl' in mod:
+                    results = earley.parse(forestify(document, head, tail), [r_and])
+                    if len(results) > 0:
+                        document.put(min(head, tail).pos, document.drop(min(head, tail).pos, max(head, tail).pos))
+                    assemble(results[0])
                 if key == 'backspace':
                     head = tail = do_drop(document, head, tail)
                 elif key == 'space':
@@ -279,7 +324,7 @@ def layout_node2(node, ctx):
         tokens = []
         for subnode in node:
             if len(tokens) > 0:
-                tokens.extend(env.font(' {} '.format(node.schema), env.fontsize, color=env.blue))
+                tokens.extend(env.font(' {} '.format(node.rule.name), env.fontsize, color=env.blue))
             tokens.append(hpack(layout_node(subnode, ctx)))
         return [hpack(tokens)]
     elif isinstance(node, Symbol) and len(node) == 0:
