@@ -12,6 +12,7 @@ Related blog posts:
 
  * http://boxbase.org/entries/2014/dec/29/first-editor-release/
  * http://boxbase.org/entries/2015/jan/19/textended-layout-engine/
+ * http://boxbase.org/entries/2015/feb/9/textended-schema/
 
 There's an IRC channel #essence in irc.freenode.net, for those who like to discuss about visual programming/structured editing.
 
