@@ -53,6 +53,9 @@ class Symbol(object):
     def build(self, function, node):
         return function(self, node)
 
+    def __repr__(self):
+        return "<symbol>"
+
 class Rule(object):
     label = ''
 
@@ -71,6 +74,11 @@ class Sequence(ListRule):
 
     def __len__(self):
         return len(self.sequence)
+
+    def __repr__(self):
+        if self.label:
+            return "{{:{} {}}}".format(self.label, ' '.join(map(repr, self.sequence)))
+        return "{{{}}}".format(' '.join(map(repr, self.sequence)))
 
     def validate(self, node):
         if not node.islist():
@@ -94,6 +102,9 @@ class Star(ListRule):
     def build(self, function, node):
         return [self.rule.build(function, subnode) for subnode in node]
 
+    def __repr__(self):
+        return repr(self.rule) + '*'
+
 class Plus(ListRule):
     def __init__(self, rule):
         self.rule = rule
@@ -108,6 +119,9 @@ class Plus(ListRule):
     def build(self, function, node):
         return [self.rule.build(function, subnode) for subnode in node]
 
+    def __repr__(self):
+        return repr(self.rule) + '+'
+
 class String(Rule):
     def validate(self, node):
         return node.isstring()
@@ -115,9 +129,15 @@ class String(Rule):
     def build(self, function, node):
         return function(self, node)
 
+    def __repr__(self):
+        return "<string>"
+
 class Binary(Rule):
     def validate(self, node):
         return node.isbinary()
 
     def build(self, function, node):
         return function(self, node)
+
+    def __repr__(self):
+        return "<binary>"

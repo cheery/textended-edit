@@ -75,6 +75,10 @@ class Builder(object):
         if slot is c_expr:
             if result is schema['sequence']:
                 return Sequence(result.build(self, node))
+            if result is schema['star']:
+                return Star(result.build(self, node)[0])
+            if result is schema['plus']:
+                return Plus(result.build(self, node)[0])
             if result == 'symbol':
                 if node[:] == 'symbol':
                     return Symbol()
@@ -91,6 +95,7 @@ class Builder(object):
                     return String()
                 if node[:] == 'binary':
                     return Binary()
+                return self.context(node[:])
         if isinstance(slot, Symbol) and result == 'symbol':
             return node[:]
         raise Exception("syn error {}, expected {}".format(node, slot))
