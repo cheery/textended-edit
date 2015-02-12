@@ -1,6 +1,5 @@
-import renderers
-import defaultlayout
 import boxmodel
+import renderers
 
 class Compositor(object):
     def __init__(self, images, debug=False):

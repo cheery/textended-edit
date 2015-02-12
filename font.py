@@ -48,6 +48,7 @@ class Font(object):
         kern = (0, 0)
         scale = float(size) / self.size
         padding = tuple(p*scale for p in self.padding)
+        result.append(LetterBox(0, size*(3.0/3.0), size*(1.0/3.0), self, (0, 0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0)))
         for ch in text:
             kern = kern[1], ord(ch)
             kern_amt = self.kernings.get(kern, 0)

@@ -30,7 +30,7 @@ class ImageLayer(object):
         varying vec2 v_texcoord;
         varying vec4 v_color;
         void main() {
-            vec2 p = (position - scroll) / resolution * 2.0 - 1.0;
+            vec2 p = (position + scroll) / resolution * 2.0 - 1.0;
             gl_Position = vec4(p.x, -p.y, 0.0, 1.0);
             v_texcoord = texcoord;
             v_color = color;
@@ -210,7 +210,7 @@ class FontLayer(object):
         varying vec2 v_texcoord;
         varying vec4 v_color;
         void main() {
-            vec2 p = (position - scroll) / resolution * 2.0 - 1.0;
+            vec2 p = (position + scroll) / resolution * 2.0 - 1.0;
             gl_Position = vec4(p.x, -p.y, 0.0, 1.0);
             v_texcoord = texcoord;
             v_color = color;
@@ -310,7 +310,7 @@ class FlatLayer(object):
 
         varying vec4 v_color;
         void main() {
-            vec2 p = (position - scroll) / resolution * 2.0 - 1.0;
+            vec2 p = (position + scroll) / resolution * 2.0 - 1.0;
             gl_Position = vec4(p.x, -p.y, 0.0, 1.0);
             v_color = color;
         }""", GL_VERTEX_SHADER)
