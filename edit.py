@@ -11,7 +11,7 @@ import schema_layout
 import sys
 
 def init():
-    global window, context, images, env, document, compositor, head #back, middle, front, document, env, head, tail
+    global window, context, images, env, document, compositor, head, tail #back, middle, front, document, env, head, tail
     SDL_Init(SDL_INIT_VIDEO)
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)
     window = SDL_CreateWindow(b"textended-edit",
@@ -38,6 +38,7 @@ def init():
     document = dom.Document(dom.Literal(u"", dom.load(sys.argv[1])))
     compositor = Compositor(images)
     head = Position.bottom(document.body)
+    tail = Position.bottom(document.body)
 
     #head = Position(len(document)-1, len(document[-1]))
     #tail = Position(len(document)-1, len(document[-1]))
@@ -64,6 +65,7 @@ def main(respond):
                 keyboard.push_event(event)
         for key, mod, text in keyboard:
             try:
+                print fingers(head, tail)
                 print key, mod, text
 #                if key == 'escape':
 #                    sys.exit(0)
@@ -107,7 +109,7 @@ def main(respond):
         SDL_GL_SwapWindow(window)
 
 def pick(x, y, drag=False):
-    global head
+    global head, tail
     nearest = None
     distance = 500**4
     for rootbox in rootboxes:
@@ -122,6 +124,8 @@ def pick(x, y, drag=False):
                     nearest = subbox
     if nearest is not None:
         head = Position(nearest.subj, nearest.index)
+        if not drag:
+            tail = head
 
 def paint(t):
     global rootboxes
@@ -134,11 +138,22 @@ def paint(t):
     rootboxes = [rootbox]
     compositor.compose(rootbox, 10, 10)
 
+    if head.subj is tail.subj:
+        selection = set()
+    else:
+        selection = set(leaves(head, tail))
+
     for rootbox in rootboxes:
         for subbox in rootbox.traverse():
             if subbox.subj is head.subj and subbox.index == head.index:
                 x0, y0, x1, y1 = subbox.quad
                 compositor.decor((x0, y0, x0+2, y1), None, (1, 0, 0, 1))
+            if subbox.subj is tail.subj and subbox.index == tail.index:
+                x0, y0, x1, y1 = subbox.quad
+                compositor.decor((x0, y0, x0+2, y1), None, (0, 1, 0, 1))
+
+            if subbox.subj in selection:
+                compositor.decor(subbox.quad, None, (1, 0, 0, 0.2))
 
     compositor.render(0, 0, width, height)
 
@@ -155,6 +170,58 @@ def get_window_size():
     height = c_int()
     SDL_GetWindowSize(window, byref(width), byref(height))
     return width.value, height.value
+
+def leaves(head, tail):
+    subj, left, right = fingers(head, tail)
+    pivot = left.pop()
+    yield pivot
+    while len(left) > 0:
+        lsubj = left.pop()
+        for node in lsubj[lsubj.index(pivot)+1:]:
+            for subnode in node.traverse():
+                if not subnode.islist():
+                    yield subnode
+        pivot = lsubj
+    rsubj = right.pop(0)
+    for node in subj[subj.index(pivot)+1:subj.index(rsubj)]:
+        for subnode in node.traverse():
+            if not subnode.islist():
+                yield subnode
+    while len(right) > 0:
+        for node in rsubj[:rsubj.index(right[0])]:
+            for subnode in node.traverse():
+                if not subnode.islist():
+                    yield subnode
+        rsubj = right.pop(0)
+    yield rsubj
+
+def fingers(head, tail):
+    h0 = finger(head)
+    h1 = finger(tail)
+    index = 0
+    for p0, p1 in zip(h0, h1):
+        if p0 is not p1:
+            break
+        index += 1
+    if index == 0 or len(h0) <= index >= len(h1):
+        return
+    subj = h0[index-1]
+    i0 = subj.index(h0[index])
+    i1 = subj.index(h1[index])
+    if i0 < i1:
+        return subj, h0[index:], h1[index:]
+    else:
+        return subj, h1[index:], h0[index:]
+
+def finger(position):
+    finger = []
+    subj = position.subj
+    while subj.parent is not None:
+        finger.append(subj)
+        subj = subj.parent
+    finger.append(subj)
+    finger.reverse()
+    return finger
 
 if __name__=='__main__':
     init()
