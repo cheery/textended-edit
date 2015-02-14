@@ -7,6 +7,7 @@ import dom
 import font
 import sdl_backend
 import time
+import traceback
 import schema_layout
 import sys
 
@@ -40,11 +41,8 @@ def init():
     head = Position.bottom(document.body)
     tail = Position.bottom(document.body)
 
-    #head = Position(len(document)-1, len(document[-1]))
-    #tail = Position(len(document)-1, len(document[-1]))
-
 def main(respond):
-    #global head, tail
+    global head, tail
     keyboard = sdl_backend.KeyboardStream()
     event = SDL_Event()
     running = True
@@ -59,13 +57,13 @@ def main(respond):
             elif event.type == SDL_MOUSEBUTTONDOWN:
                 pick(event.motion.x, event.motion.y)
             #elif event.type == SDL_MOUSEWHEEL:
-            #    selection.visual.scroll_x -= event.wheel.x * 10.0
-            #    selection.visual.scroll_y -= event.wheel.y * 10.0
+                #selection.visual.scroll_x += event.wheel.x * 10.0
+                #selection.visual.scroll_y += event.wheel.y * 10.0
             else:
                 keyboard.push_event(event)
         for key, mod, text in keyboard:
             try:
-                print fingers(head, tail)
+                #print list(forest(head, tail))
                 print key, mod, text
 #                if key == 'escape':
 #                    sys.exit(0)
@@ -103,6 +101,21 @@ def main(respond):
 #                    symbol.put(head.index, text)
 #                    head = Position(head.pos, head.index + len(text))
 #                    tail = head
+
+                if key == 'space':
+                    subj = head.subj
+                    parent = subj.parent
+                    index = parent.index(subj)
+                    nsym = dom.Symbol(subj.drop(head.index, len(subj)))
+                    seq = parent.drop(index, index+1) + [nsym]
+                    if parent.label == '@':
+                        parent.put(index, seq)
+                    else:
+                        parent.put(index, [dom.Literal(u'@', seq)])
+                    tail = head = Position(nsym, 0)
+                elif text is not None:
+                    head.subj.put(head.index, text)
+                    tail = head = Position(head.subj, head.index+1)
             except Exception:
                 traceback.print_exc()
         paint(time.time())
@@ -134,9 +147,15 @@ def paint(t):
     glClearColor(*env.background)
     glClear(GL_COLOR_BUFFER_BIT)
     compositor.clear()
-    rootbox = schema_layout.page(env, document.body)
-    rootboxes = [rootbox]
-    compositor.compose(rootbox, 10, 10)
+    main, outboxes = schema_layout.page(env, document.body)
+    rootboxes = [main]
+    compositor.compose(main, 10, 10)
+    min_y = 10
+    for anchor, outbox in outboxes:
+        y = max(anchor.quad[1], min_y)
+        compositor.compose(outbox, max(320, int(main.quad[2])+10), int(y))
+        rootboxes.append(outbox)
+        min_y = outbox.quad[3] + 10
 
     if head.subj is tail.subj:
         selection = set()
@@ -170,6 +189,50 @@ def get_window_size():
     height = c_int()
     SDL_GetWindowSize(window, byref(width), byref(height))
     return width.value, height.value
+
+def forest(head, tail):
+    subj, left, right = fingers(head, tail)
+    while len(left) > 0 and leftmost(left[-1]):
+        left.pop()
+    while len(right) > 0 and rightmost(right[-1]):
+        right.pop()
+    complete = (len(left) == 0 and len(right) == 0)
+    while complete and leftmost(subj) and rightmost(subj):
+        subj = subj.parent
+    if complete:
+        yield subj
+    else:
+        if len(left) > 0:
+            lsubj = left.pop()
+            yield lsubj
+            start = indexof(lsubj) + 1
+        else:
+            start = 0
+        while len(left) > 0:
+            lsubj = left.pop()
+            for node in lsubj[start:]:
+                yield node
+            start = indexof(lsubj) + 1
+        stop = indexof(right[0]) if len(right) > 0 else len(subj)
+        for node in subj[start:stop]:
+            yield node
+        while len(right) > 1:
+            rsubj = right.pop(0)
+            for node in rsubj[0:indexof(right[0])]:
+                yield node
+        for node in right:
+            yield node
+
+def leftmost(node):
+    parent = node.parent
+    return parent is not None and parent.index(node) == 0
+
+def rightmost(node):
+    parent = node.parent
+    return parent is not None and parent.index(node) == len(parent)-1
+
+def indexof(node):
+    return node.parent.index(node)
 
 def leaves(head, tail):
     subj, left, right = fingers(head, tail)

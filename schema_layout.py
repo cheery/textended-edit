@@ -4,11 +4,11 @@ from schema import Rule, ListRule
 
 
 def page(env, subj):
-    context = Object(env=env)
+    context = Object(env=env, outboxes=[])
     tokens = []
     for node in subj:
         tokens.extend(layout_element(context, node))
-    return vpack(tokens)
+    return vpack(tokens), context.outboxes
 
 globs = globals()
 
@@ -31,6 +31,18 @@ def layout_element(context, subj):
             return [hpack(plaintext(context.env, "Rule:" + result.label))]
         elif result == 'symbol':
             return plaintext(context.env, subj)
+        elif result == 'blank':
+            box = hpack(plaintext(context.env, "___"))
+            box.set_subj(subj, 0)
+            return [box]
+        elif result == 'list' and subj.label == '@':
+            tokens = []
+            for subnode in subj:
+                tokens.append(hpack(_layout(None, subnode)))
+            outbox = Padding(vpack(tokens), (4, 4, 4, 4), Patch9("assets/border-1px.png"))
+            anchor = ImageBox(10, 10, 2, None, context.env.white)
+            context.outboxes.append((anchor, outbox))
+            return [anchor]
         else:
             return [hpack(plaintext(context.env, result + ":" + subj.label))]
     return _layout(None, subj)
