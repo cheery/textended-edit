@@ -149,9 +149,9 @@ class Symbol(Node):
 class Literal(Node):
     def __init__(self, label, contents, ident=""):
         self.ident = ident
-        self._label = label
+        self._label = unicode(label)
         assert isinstance(ident, str), repr(ident)
-        assert isinstance(label, unicode), repr(label)
+        assert isinstance(self.label, unicode), repr(self.label)
         if isinstance(contents, (str, unicode)):
             self.contents = contents
         else:

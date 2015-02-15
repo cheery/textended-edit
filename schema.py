@@ -1,3 +1,5 @@
+import dom
+
 class Schema(object):
     def __init__(self, toplevel, rules, contexes):
         self.toplevel = toplevel
@@ -46,6 +48,9 @@ class Context(object):
     def __repr__(self):
         return "<{}>".format(self.name)
 
+    def blank(self):
+        return dom.Symbol(u"")
+
 class Symbol(object):
     def validate(self, node):
         return node.issymbol()
@@ -55,6 +60,9 @@ class Symbol(object):
 
     def __repr__(self):
         return "<symbol>"
+
+    def blank(self):
+        return dom.Symbol(u"")
 
 class Rule(object):
     label = ''
@@ -90,6 +98,9 @@ class Sequence(ListRule):
     def build(self, function, node):
         return [subrule.build(function, subnode) for subrule, subnode in zip(self, node)]
 
+    def blank(self):
+        return dom.Literal(self.label, [subrule.blank() for subrule in self])
+
 class Star(ListRule):
     def __init__(self, rule):
         self.rule = rule
@@ -104,6 +115,9 @@ class Star(ListRule):
 
     def __repr__(self):
         return repr(self.rule) + '*'
+
+    def blank(self):
+        return dom.Literal(self.label, [])
 
 class Plus(ListRule):
     def __init__(self, rule):
@@ -122,6 +136,9 @@ class Plus(ListRule):
     def __repr__(self):
         return repr(self.rule) + '+'
 
+    def blank(self):
+        return dom.Literal(self.label, [self.rule.blank()])
+
 class String(Rule):
     def validate(self, node):
         return node.isstring()
@@ -132,6 +149,9 @@ class String(Rule):
     def __repr__(self):
         return "<string>"
 
+    def blank(self):
+        return dom.Literal(self.label, u"")
+
 class Binary(Rule):
     def validate(self, node):
         return node.isbinary()
@@ -141,3 +161,6 @@ class Binary(Rule):
 
     def __repr__(self):
         return "<binary>"
+
+    def blank(self):
+        return dom.Literal(self.label, "")

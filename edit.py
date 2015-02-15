@@ -3,6 +3,7 @@ from ctypes import c_int, byref, c_char, POINTER, c_void_p
 from OpenGL.GL import *
 from selection import Position
 from sdl2 import *
+from workspace import Workspace
 import dom
 import font
 import sdl_backend
@@ -12,7 +13,7 @@ import schema_layout
 import sys
 
 def init():
-    global window, context, images, env, document, compositor, head, tail #back, middle, front, document, env, head, tail
+    global window, context, images, env, workspace, document, compositor, head, tail #back, middle, front, document, env, head, tail
     SDL_Init(SDL_INIT_VIDEO)
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)
     window = SDL_CreateWindow(b"textended-edit",
@@ -36,10 +37,16 @@ def init():
         fontsize=12,
         font=font.load("OpenSans.fnt"))
 
-    document = dom.Document(dom.Literal(u"", dom.load(sys.argv[1])))
+    workspace = Workspace()
+    document = workspace.get(sys.argv[1])
     compositor = Compositor(images)
-    head = Position.bottom(document.body)
-    tail = Position.bottom(document.body)
+    tail = head = Position.bottom(document.body)
+
+    subj = head.subj
+    if subj.islist():
+        sym = dom.Symbol(u"")
+        subj.put(len(subj), [sym])
+        tail = head = Position.bottom(sym)
 
 def main(respond):
     global head, tail
@@ -73,6 +80,25 @@ def main(respond):
 #                    document.put(head.pos+1, syms)
 #                if key == 'tab':
 #                    head = tail = trim_plant(document, head, tail)
+                if key == 's' and 'ctrl' in mod:
+                    print "saved", document.name
+                    dom.save(document.name, document.body)
+                if key == 'backspace' and 'ctrl' in mod:
+                    subj = head.subj
+                    parent = subj.parent
+                    if parent is not None:
+                        index = parent.index(subj)
+                        parent.drop(index, index+1)
+                        tail = head = Position.top(parent[index])
+                if key == 'f1':
+                    if has_modeline(document):
+                        tail = head = Position.bottom(document.body[0])
+                    else:
+                        modeline = dom.Literal(u"##", [dom.Symbol(u"")])
+                        document.body.put(0, [modeline])
+                        tail = head = Position.bottom(modeline)
+
+
                 if key == 'f12':
                     compositor.debug = not compositor.debug
 #                    back.debug = not back.debug
@@ -101,18 +127,45 @@ def main(respond):
 #                    symbol.put(head.index, text)
 #                    head = Position(head.pos, head.index + len(text))
 #                    tail = head
+                if 'left alt' in mod and text != None and head.subj.isblank():
+                    result = []
+                    for rule in schema_layout.schema.rules:
+                        if rule.startswith(text):
+                            result.append(rule)
+                    block = schema_layout.schema.rules[result.pop(0)].blank()
+                    subj = head.subj
+                    parent = subj.parent
+                    index = parent.index(subj)
+                    parent.drop(index, index+1)
+                    parent.put(index, [block])
+                    tail = head = Position.top(block)
 
-                if key == 'space':
+                elif key == 'space' and head.subj.issymbol():
                     subj = head.subj
                     parent = subj.parent
                     index = parent.index(subj)
                     nsym = dom.Symbol(subj.drop(head.index, len(subj)))
                     seq = parent.drop(index, index+1) + [nsym]
-                    if parent.label == '@':
+                    if parent.label in ('@', '##'):
                         parent.put(index, seq)
                     else:
                         parent.put(index, [dom.Literal(u'@', seq)])
                     tail = head = Position(nsym, 0)
+                elif text == ';' and head.subj.isstring():
+                    subj = head.subj
+                    parent = subj.parent
+                    index = parent.index(subj)+1
+                    sym = dom.Symbol(u"")
+                    parent.put(index, [sym])
+                    tail = head = Position(sym, 0)
+                elif text == '"' and head.subj.isblank():
+                    string = dom.Literal(u"", u"")
+                    subj = head.subj
+                    parent = subj.parent
+                    index = parent.index(subj)
+                    parent.drop(index, index+1)
+                    parent.put(index, [string])
+                    tail = head = Position(string, 0)
                 elif text is not None:
                     head.subj.put(head.index, text)
                     tail = head = Position(head.subj, head.index+1)
@@ -189,6 +242,11 @@ def get_window_size():
     height = c_int()
     SDL_GetWindowSize(window, byref(width), byref(height))
     return width.value, height.value
+
+def has_modeline(document):
+    if len(document.body) > 0:
+        head = document.body[0]
+        return head.islist() and head.label == '##'
 
 def forest(head, tail):
     subj, left, right = fingers(head, tail)

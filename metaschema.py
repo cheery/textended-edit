@@ -13,7 +13,6 @@ c_expr.valid_contexes.update([c_term])
 c_expr.valid_terms.update([Symbol()])
 
 schema = Schema(c_rule, {
-    'language': rule([c_rule], String()),
     'toplevel': rule([c_rule], Sequence([Symbol()])),
     'rule': rule([c_rule], Sequence([
         Symbol(),
@@ -32,6 +31,8 @@ schema = Schema(c_rule, {
 def load(tree):
     builder = Builder()
     for node in tree:
+        if node.label == '##':
+            continue
         builder(schema.toplevel, node)
     return Schema(builder.toplevel, builder.rules, builder.contexes)
 
@@ -65,8 +66,6 @@ class Builder(object):
                         ctx.valid_contexes.add(term)
                     else:
                         ctx.valid_terms.add(term)
-                return
-            elif result is schema['language']:
                 return
             elif result is schema['toplevel']:
                 name, = result.build(self, node)
