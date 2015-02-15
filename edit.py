@@ -27,7 +27,7 @@ def init():
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-    env = Object(
+    env = layout.Object(
         background=(0x27/255.0, 0x28/255.0, 0x22/255.0, 1), #272822
         white=(1.0, 1.0, 1.0, 1.0),
         blue=(0.5, 0.5, 1.0, 1.0),
@@ -92,7 +92,7 @@ def main(respond):
                         parent.drop(index, index+1)
                         tail = head = Position.top(parent[index])
                 if key == 'f1':
-                    if has_modeline(document):
+                    if schema.has_modeline(document.body):
                         tail = head = Position.bottom(document.body[0])
                     else:
                         modeline = schema.modeline.blank()
@@ -127,11 +127,11 @@ def main(respond):
 #                    tail = head
                 if 'left alt' in mod and text != None and head.subj.isblank():
                     result = []
-                    schema = workspace.active_schema(head.subj)
-                    for rule in schema.rules:
+                    active = workspace.active_schema(head.subj)
+                    for rule in active.rules:
                         if rule.startswith(text):
                             result.append(rule)
-                    block = schema.rules[result.pop(0)].blank()
+                    block = active.rules[result.pop(0)].blank()
                     subj = head.subj
                     parent = subj.parent
                     index = parent.index(subj)
@@ -230,21 +230,11 @@ def paint(t):
 def clamp(x, low, high):
     return min(max(x, low), high)
 
-class Object(object):
-    def __init__(self, **kw):
-        for k in kw:
-            setattr(self, k, kw[k])
-
 def get_window_size():
     width = c_int()
     height = c_int()
     SDL_GetWindowSize(window, byref(width), byref(height))
     return width.value, height.value
-
-def has_modeline(document):
-    if len(document.body) > 0:
-        head = document.body[0]
-        return schema.modeline.validate(head)
 
 def forest(head, tail):
     subj, left, right = fingers(head, tail)
