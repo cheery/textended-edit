@@ -16,7 +16,11 @@ class Schema(object):
             return 'blank'
         if node.issymbol():
             return 'symbol'
-        if len(node.label) > 0 and node.label in self.rules:
+        if node.label == '##' and modeline.validate(node):
+            return '##'
+        elif node.label == '#' and modechange.validate(node):
+            return '#'
+        elif len(node.label) > 0 and node.label in self.rules:
             rule = self.rules[node.label]
             if rule.validate(node):
                 return rule
@@ -164,3 +168,9 @@ class Binary(Rule):
 
     def blank(self):
         return dom.Literal(self.label, "")
+
+modeline = Plus(Symbol())
+modeline.label = '##'
+modechange = Sequence([Plus(Symbol()), Star(Context("*"))])
+modechange.label = '#'
+blankschema = Schema('*', {}, {})

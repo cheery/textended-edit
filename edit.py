@@ -9,6 +9,7 @@ import font
 import sdl_backend
 import time
 import traceback
+import schema
 import schema_layout
 import sys
 
@@ -94,16 +95,13 @@ def main(respond):
                     if has_modeline(document):
                         tail = head = Position.bottom(document.body[0])
                     else:
-                        modeline = dom.Literal(u"##", [dom.Symbol(u"")])
+                        modeline = schema.modeline.blank()
                         document.body.put(0, [modeline])
                         tail = head = Position.bottom(modeline)
 
 
                 if key == 'f12':
                     compositor.debug = not compositor.debug
-#                    back.debug = not back.debug
-#                    middle.debug = not middle.debug
-#                    front.debug = not front.debug
 #                if key == 'a' and 'ctrl' in mod:
 #                    head, tail = expand_selection(document, head, tail)
 #                if key == 'f' and 'ctrl' in mod:
@@ -246,7 +244,7 @@ def get_window_size():
 def has_modeline(document):
     if len(document.body) > 0:
         head = document.body[0]
-        return head.islist() and head.label == '##'
+        return schema.modeline.validate(head)
 
 def forest(head, tail):
     subj, left, right = fingers(head, tail)
