@@ -174,3 +174,7 @@ modeline.label = '##'
 modechange = Sequence([Plus(Symbol()), Star(Context("*"))])
 modechange.label = '#'
 blankschema = Schema('*', {}, {})
+
+def has_modeline(body):
+    if len(body) > 0:
+        return modeline.validate(body[0])

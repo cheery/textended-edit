@@ -1,14 +1,9 @@
 from boxmodel import *
-from schema import Rule, ListRule, modeline, modechange, blankschema
-import dom
+from schema import Rule, ListRule, modeline, modechange, blankschema, has_modeline
 import importlib
-import metaschema
-import os
 
-schema_cache = {}
-
-def page(env, subj):
-    context = Object(env=env, outboxes=[], schema=blankschema, layout=None)
+def page(workspace, env, subj):
+    context = Object(workspace=workspace, env=env, outboxes=[], schema=blankschema, layout=None)
     tokens = []
     if has_modeline(subj):
         configure_schema(context, subj[0])
@@ -18,34 +13,11 @@ def page(env, subj):
 
 def configure_schema(context, modeline):
     schema_name = modeline[0][:]
-    context.schema = load_schema(schema_name)
+    context.schema = context.workspace.get_schema(schema_name)
     try:
         context.layout = importlib.import_module("layouts." + schema_name)
     except ImportError:
         context.layout = None
-
-def load_schema(name):
-    if name == 'schema':
-        return metaschema.schema
-    path = os.path.join('schemas', name + '.t+')
-    if os.path.isfile(path):
-        if path in schema_cache:
-            return schema_cache[path]
-        else:
-            schema = schema_cache[path] = metaschema.load(dom.load(path))
-            return schema
-    return blankschema
-
-def active_schema(subj):
-    while subj.parent is not None:
-        subj = subj.parent
-        if subj.label == '#' and modechange.validate(subj):
-            modeline = subj[0]
-            return load_schema(modeline[0][:])
-    if has_modeline(subj):
-        modeline = subj[0]
-        return load_schema(modeline[0][:])
-    return blankschema
 
 def layout_element(context, subj):
     def _layout(slot, subj):
@@ -100,10 +72,6 @@ def plaintext(env, text, fontsize=None, color=None):
     return env.font(text,
         env.fontsize if fontsize is None else fontsize,
         color = env.white if color is None else color)
-
-def has_modeline(body):
-    if len(body) > 0:
-        return modeline.validate(body[0])
 
 class Object(object):
     def __init__(self, **kw):

@@ -127,7 +127,7 @@ def main(respond):
 #                    tail = head
                 if 'left alt' in mod and text != None and head.subj.isblank():
                     result = []
-                    schema = layout.active_schema(head.subj)
+                    schema = workspace.active_schema(head.subj)
                     for rule in schema.rules:
                         if rule.startswith(text):
                             result.append(rule)
@@ -198,7 +198,7 @@ def paint(t):
     glClearColor(*env.background)
     glClear(GL_COLOR_BUFFER_BIT)
     compositor.clear()
-    main, outboxes = layout.page(env, document.body)
+    main, outboxes = layout.page(workspace, env, document.body)
     rootboxes = [main]
     compositor.compose(main, 10, 10)
     min_y = 10
