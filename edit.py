@@ -125,7 +125,17 @@ def main(respond):
 #                    symbol.put(head.index, text)
 #                    head = Position(head.pos, head.index + len(text))
 #                    tail = head
-                if key == 'tab' and head.subj.issymbol():
+                if text == ';':
+                    subj = head.subj
+                    above = head.above
+                    if subj.issymbol() and above is not None:
+                        head = above+1
+                    above = head.above
+                    if above is not None:
+                        blank = dom.Symbol(u"")
+                        (above+1).put([blank])
+                        head = tail = Position(blank, 0)
+                elif key == 'tab' and head.subj.issymbol():
                     result = []
                     active = workspace.active_schema(head.subj)
                     name = head.subj[:]
@@ -139,7 +149,7 @@ def main(respond):
                     parent.drop(index, index+1)
                     parent.put(index, [block])
                     tail = head = Position.top(block)
-                if 'left alt' in mod and text != None and head.subj.isblank():
+                elif 'left alt' in mod and text != None and head.subj.isblank():
                     result = []
                     active = workspace.active_schema(head.subj)
                     for rule in active.rules:
@@ -186,6 +196,10 @@ def main(respond):
                     parent.put(index, [string])
                     tail = head = Position(string, 0)
                 elif text is not None:
+                    if head.subj.islist():
+                        blank = dom.Symbol(u"")
+                        head.put([blank])
+                        head = Position(blank, 0)
                     head.subj.put(head.index, text)
                     tail = head = Position(head.subj, head.index+1)
             except Exception:

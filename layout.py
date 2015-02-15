@@ -23,6 +23,10 @@ def configure_schema(context, modeline):
 
 def layout_element(context, subj):
     def _layout(slot, subj):
+        if subj.isblank():
+            box = hpack(plaintext(context.env, "___"))
+            box.set_subj(subj, 0)
+            return [box]
         result = context.schema.recognize(subj)
         if isinstance(result, ListRule):
             name = result.label.replace('-', '_')
@@ -40,10 +44,6 @@ def layout_element(context, subj):
             return [hpack(plaintext(context.env, "Rule:" + result.label))]
         elif result == 'symbol':
             return plaintext(context.env, subj)
-        elif result == 'blank':
-            box = hpack(plaintext(context.env, "___"))
-            box.set_subj(subj, 0)
-            return [box]
         elif result == 'list' and subj.label == '@':
             tokens = []
             for subnode in subj:
