@@ -125,6 +125,20 @@ def main(respond):
 #                    symbol.put(head.index, text)
 #                    head = Position(head.pos, head.index + len(text))
 #                    tail = head
+                if key == 'tab' and head.subj.issymbol():
+                    result = []
+                    active = workspace.active_schema(head.subj)
+                    name = head.subj[:]
+                    for rule in active.rules:
+                        if rule.startswith(name):
+                            result.append(rule)
+                    block = active.rules[result.pop(0)].blank()
+                    subj = head.subj
+                    parent = subj.parent
+                    index = parent.index(subj)
+                    parent.drop(index, index+1)
+                    parent.put(index, [block])
+                    tail = head = Position.top(block)
                 if 'left alt' in mod and text != None and head.subj.isblank():
                     result = []
                     active = workspace.active_schema(head.subj)
@@ -138,6 +152,13 @@ def main(respond):
                     parent.drop(index, index+1)
                     parent.put(index, [block])
                     tail = head = Position.top(block)
+                elif key == 'backspace' and not head.subj.islist():
+                    if head.index > 0:
+                        head.subj.drop(head.index-1, head.index)
+                        tail = head = Position(head.subj, head.index-1)
+                elif key == 'delete' and not head.subj.islist():
+                    if head.index < len(head.subj):
+                        head.subj.drop(head.index, head.index+1)
                 elif key == 'space' and head.subj.issymbol():
                     subj = head.subj
                     parent = subj.parent

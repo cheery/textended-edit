@@ -13,6 +13,8 @@ def page(workspace, env, subj):
 
 def configure_schema(context, modeline):
     schema_name = modeline[0][:]
+    if schema_name == '':
+        return blankschema
     context.schema = context.workspace.get_schema(schema_name)
     try:
         context.layout = importlib.import_module("layouts." + schema_name)

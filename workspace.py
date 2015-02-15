@@ -40,10 +40,10 @@ class Workspace(object):
             return metaschema.schema
         path = os.path.join('schemas', name + '.t+')
         if os.path.isfile(path):
-            if path in schema_cache:
-                return schema_cache[path]
+            if path in self.schema_cache:
+                return self.schema_cache[path]
             else:
-                schema = schema_cache[path] = metaschema.load(dom.load(path))
+                schema = self.schema_cache[path] = metaschema.load(dom.load(path))
                 return schema
         return blankschema
 

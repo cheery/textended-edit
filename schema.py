@@ -55,6 +55,18 @@ class Context(object):
     def blank(self):
         return dom.Symbol(u"")
 
+    def match(self, result):
+        if result in self.valid_rules:
+            return [self]
+        for term in self.valid_terms:
+            if term.match_term(result):
+                return [self]
+        for ctx in self.valid_contexes:
+            match = ctx.match(result)
+            if len(match) > 0:
+                return [self] + match
+        return []
+ 
 class Symbol(object):
     def validate(self, node):
         return node.issymbol()
@@ -67,6 +79,9 @@ class Symbol(object):
 
     def blank(self):
         return dom.Symbol(u"")
+
+    def match_term(self, result):
+        return result in ('symbol', 'blank')
 
 class Rule(object):
     label = ''
@@ -156,6 +171,9 @@ class String(Rule):
     def blank(self):
         return dom.Literal(self.label, u"")
 
+    def match_term(self, result):
+        return result == 'string'
+
 class Binary(Rule):
     def validate(self, node):
         return node.isbinary()
@@ -168,6 +186,9 @@ class Binary(Rule):
 
     def blank(self):
         return dom.Literal(self.label, "")
+
+    def match_term(self, result):
+        return result == 'binary'
 
 modeline = Plus(Symbol())
 modeline.label = '##'
