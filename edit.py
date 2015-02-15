@@ -6,12 +6,12 @@ from sdl2 import *
 from workspace import Workspace
 import dom
 import font
+import layout
+import schema
 import sdl_backend
+import sys
 import time
 import traceback
-import schema
-import schema_layout
-import sys
 
 def init():
     global window, context, images, env, workspace, document, compositor, head, tail #back, middle, front, document, env, head, tail
@@ -127,17 +127,17 @@ def main(respond):
 #                    tail = head
                 if 'left alt' in mod and text != None and head.subj.isblank():
                     result = []
-                    for rule in schema_layout.schema.rules:
+                    schema = layout.active_schema(head.subj)
+                    for rule in schema.rules:
                         if rule.startswith(text):
                             result.append(rule)
-                    block = schema_layout.schema.rules[result.pop(0)].blank()
+                    block = schema.rules[result.pop(0)].blank()
                     subj = head.subj
                     parent = subj.parent
                     index = parent.index(subj)
                     parent.drop(index, index+1)
                     parent.put(index, [block])
                     tail = head = Position.top(block)
-
                 elif key == 'space' and head.subj.issymbol():
                     subj = head.subj
                     parent = subj.parent
@@ -198,7 +198,7 @@ def paint(t):
     glClearColor(*env.background)
     glClear(GL_COLOR_BUFFER_BIT)
     compositor.clear()
-    main, outboxes = schema_layout.page(env, document.body)
+    main, outboxes = layout.page(env, document.body)
     rootboxes = [main]
     compositor.compose(main, 10, 10)
     min_y = 10
