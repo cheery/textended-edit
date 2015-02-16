@@ -34,7 +34,7 @@ class Schema(object):
 
     def recognize_in_context(self, node):
         if node.parent is None:
-            return self.toplevel
+            return Star(self.toplevel)
         if len(node.label) > 0:
             return self.recognize(node)
         rule = self.recognize_in_context(node.parent)

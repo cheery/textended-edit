@@ -151,13 +151,13 @@ def main(respond):
                         index = parent.index(subj)
                         parent.drop(index, index+1)
                         tail = head = Position.top(parent[index])
-                if key == 'f1':
-                    if schema.has_modeline(document.body):
-                        tail = head = Position.bottom(document.body[0])
+                if key == 'f2':
+                    if schema.has_modeline(visual.document.body):
+                        visual.tail = visual.head = Position.bottom(visual.document.body[0])
                     else:
                         modeline = schema.modeline.blank()
-                        document.body.put(0, [modeline])
-                        tail = head = Position.bottom(modeline)
+                        visual.document.body.put(0, [modeline])
+                        visual.tail = visual.head = Position.bottom(modeline)
 
 
                 if key == 'f12':

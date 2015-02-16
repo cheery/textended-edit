@@ -1,5 +1,6 @@
 from boxmodel import *
 from schema import Rule, ListRule, modeline, modechange, blankschema, has_modeline
+import dom
 import importlib
 
 def page(workspace, env, subj):
@@ -25,10 +26,6 @@ def configure_schema(context, modeline):
 
 def layout_element(context, subj):
     def _layout(slot, subj):
-        if subj.isblank():
-            box = hpack(plaintext(context.env, "___"))
-            box.set_subj(subj, 0)
-            return [box]
         result = context.schema.recognize(subj)
         if isinstance(result, ListRule):
             name = result.label.replace('-', '_')
@@ -44,7 +41,7 @@ def layout_element(context, subj):
             if hasattr(context.layout, name):
                 return getattr(context.layout, name)(context, subj)
             return [hpack(plaintext(context.env, "Rule:" + result.label))]
-        elif result == 'symbol':
+        elif result in ('symbol', 'blank'):
             return plaintext(context.env, subj)
         elif result == 'list' and subj.label == '@':
             tokens = []
@@ -71,9 +68,15 @@ def layout_modeline(context, modeline):
     for sym in modeline:
         tokens.extend(plaintext(context.env, " "))
         tokens.extend(plaintext(context.env, sym))
-    return [hpack(tokens)]
+    line = hpack(tokens)
+    line.hint = {'vskip': True}
+    return [line]
 
 def plaintext(env, text, fontsize=None, color=None):
+    if isinstance(text, dom.Symbol) and len(text) == 0:
+        box = hpack(plaintext(env, "___"))
+        box.set_subj(text, 0)
+        return [box]
     return env.font(text,
         env.fontsize if fontsize is None else fontsize,
         color = env.white if color is None else color)
@@ -88,14 +91,17 @@ def packlines(tokens, width):
     total_width = 0
     greedy_cutpoint = -1
     for token in tokens:
-        if token.vsize > 20 and not isinstance(token, Glue):
-            out.append(hpack(line))
+        if (token.vsize > 20 and not isinstance(token, Glue)) or token.get_hint('vskip', False):
+            if len(line) > 0:
+                out.append(hpack(line))
             out.append(token)
             line = []
             greedy_cutpoint = -1
             total_width = 0
         else:
             if token.get_hint('break', False):
+                if len(line) == 0:
+                    continue
                 greedy_cutpoint = len(line)
             line.append(token)
             total_width += token.width
