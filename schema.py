@@ -32,6 +32,16 @@ class Schema(object):
             return 'list'
         raise Exception("panic")
 
+    def recognize_in_context(self, node):
+        if node.parent is None:
+            return self.toplevel
+        if len(node.label) > 0:
+            return self.recognize(node)
+        rule = self.recognize_in_context(node.parent)
+        if isinstance(rule, ListRule):
+            return rule.descend(node.parent, node)
+        return self.recognize(node)
+
 class Context(object):
     def __init__(self, name):
         self.name = name
@@ -120,6 +130,9 @@ class Sequence(ListRule):
     def blank(self):
         return dom.Literal(self.label, [subrule.blank() for subrule in self])
 
+    def descend(self, subj, obj):
+        return self.sequence[subj.index(obj)]
+
 class Star(ListRule):
     def __init__(self, rule):
         self.rule = rule
@@ -137,6 +150,9 @@ class Star(ListRule):
 
     def blank(self):
         return dom.Literal(self.label, [])
+
+    def descend(self, subj, obj):
+        return self.rule
 
 class Plus(ListRule):
     def __init__(self, rule):
@@ -157,6 +173,9 @@ class Plus(ListRule):
 
     def blank(self):
         return dom.Literal(self.label, [self.rule.blank()])
+
+    def descend(self, subj, obj):
+        return self.rule
 
 class String(Rule):
     def validate(self, node):
@@ -194,7 +213,7 @@ modeline = Plus(Symbol())
 modeline.label = '##'
 modechange = Sequence([Plus(Symbol()), Star(Context("*"))])
 modechange.label = '#'
-blankschema = Schema('*', {}, {})
+blankschema = Schema(Context('*'), {}, {})
 
 def has_modeline(body):
     if len(body) > 0:

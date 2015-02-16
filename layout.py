@@ -9,7 +9,9 @@ def page(workspace, env, subj):
         configure_schema(context, subj[0])
     for node in subj:
         tokens.extend(layout_element(context, node))
-    return vpack(tokens), context.outboxes
+        tokens.append(separator(context.env))
+    tokens.extend(sentinel(context.env, subj))
+    return packlines(tokens, 400), context.outboxes
 
 def configure_schema(context, modeline):
     schema_name = modeline[0][:]
@@ -47,8 +49,9 @@ def layout_element(context, subj):
         elif result == 'list' and subj.label == '@':
             tokens = []
             for subnode in subj:
-                tokens.append(hpack(_layout(None, subnode)))
-            outbox = Padding(vpack(tokens), (4, 4, 4, 4), Patch9("assets/border-1px.png"))
+                tokens.extend(_layout(None, subnode))
+                tokens.append(separator(context.env))
+            outbox = Padding(packlines(tokens, 400), (4, 4, 4, 4), Patch9("assets/border-1px.png"))
             anchor = ImageBox(10, 10, 2, None, context.env.white)
             context.outboxes.append((anchor, outbox))
             return [anchor]
@@ -75,7 +78,41 @@ def plaintext(env, text, fontsize=None, color=None):
         env.fontsize if fontsize is None else fontsize,
         color = env.white if color is None else color)
 
+def sentinel(env, subj):
+    if len(subj) == 0:
+        yield ImageBox(10, 10, 5, None, env.gray).set_subj(subj, 0)
+
+def packlines(tokens, width):
+    out = []
+    line = []
+    total_width = 0
+    greedy_cutpoint = -1
+    for token in tokens:
+        if token.vsize > 20 and not isinstance(token, Glue):
+            out.append(hpack(line))
+            out.append(token)
+            line = []
+            greedy_cutpoint = -1
+            total_width = 0
+        else:
+            if token.get_hint('break', False):
+                greedy_cutpoint = len(line)
+            line.append(token)
+            total_width += token.width
+            if total_width > width and greedy_cutpoint >= 0:
+                out.append(hpack(line[:greedy_cutpoint+1]))
+                line = line[greedy_cutpoint+1:]
+                total_width = sum(item.width for item in line)
+    if len(line) > 0:
+        out.append(hpack(line))
+    return vpack(out)
+
 class Object(object):
     def __init__(self, **kw):
         for k in kw:
             setattr(self, k, kw[k])
+
+def separator(env):
+    glue = Glue(4)
+    glue.hint = {'break': True}
+    return glue

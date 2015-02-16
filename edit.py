@@ -13,8 +13,70 @@ import sys
 import time
 import traceback
 
+class Visual(object):
+    def __init__(self, images, workspace, document, env):
+        self.images = images
+        self.workspace = workspace
+        self.document = document
+        self.env = env
+        self.compositor = Compositor(images)
+        self.head = Position.bottom(document.body)
+        self.tail = self.head
+        self.rootboxes = []
+
+    def pick(self, x, y, drag=False):
+        nearest = None
+        distance = 500**4
+        for rootbox in self.rootboxes:
+            for subbox in rootbox.traverse():
+                if subbox.subj is not None:
+                    x0, y0, x1, y1 = subbox.quad
+                    dx = clamp(x, x0, x1) - x
+                    dy = clamp(y, y0, y1) - y
+                    d = dx**4 + dy**2
+                    if d < distance:
+                        distance = d
+                        nearest = subbox
+        if nearest is not None:
+            self.head = Position(nearest.subj, nearest.index)
+            if not drag:
+                self.tail = self.head
+
+    def render(self, scroll_x, scroll_y, width, height):
+        glClearColor(*self.env.background)
+        glClear(GL_COLOR_BUFFER_BIT)
+        self.compositor.clear()
+        main, outboxes = layout.page(self.workspace, self.env, self.document.body)
+        self.rootboxes = [main]
+        self.compositor.compose(main, 10, 10)
+        min_y = 10
+        for anchor, outbox in outboxes:
+            y = max(anchor.quad[1], min_y)
+            self.compositor.compose(outbox, max(320, int(main.quad[2])+10), int(y))
+            self.rootboxes.append(outbox)
+            min_y = outbox.quad[3] + 10
+
+        if self.head.subj is self.tail.subj:
+            selection = set()
+        else:
+            selection = set(leaves(self.head, self.tail))
+
+        for rootbox in self.rootboxes:
+            for subbox in rootbox.traverse():
+                if subbox.subj is self.head.subj and subbox.index == self.head.index:
+                    x0, y0, x1, y1 = subbox.quad
+                    self.compositor.decor((x0, y0, x0+2, y1), None, (1, 0, 0, 1))
+                if subbox.subj is self.tail.subj and subbox.index == self.tail.index:
+                    x0, y0, x1, y1 = subbox.quad
+                    self.compositor.decor((x0, y0, x0+2, y1), None, (0, 1, 0, 1))
+
+                if subbox.subj in selection:
+                    self.compositor.decor(subbox.quad, None, (1, 0, 0, 0.2))
+
+        self.compositor.render(scroll_x, scroll_y, width, height)
+
 def init():
-    global window, context, images, env, workspace, document, compositor, head, tail #back, middle, front, document, env, head, tail
+    global window, context, images, workspace, visual
     SDL_Init(SDL_INIT_VIDEO)
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)
     window = SDL_CreateWindow(b"textended-edit",
@@ -40,14 +102,12 @@ def init():
 
     workspace = Workspace()
     document = workspace.get(sys.argv[1])
-    compositor = Compositor(images)
-    tail = head = Position.bottom(document.body)
-
-    subj = head.subj
-    if subj.islist():
-        sym = dom.Symbol(u"")
-        subj.put(len(subj), [sym])
-        tail = head = Position.bottom(sym)
+    visual = Visual(images, workspace, document, env)
+    #subj = head.subj
+    #if subj.islist():
+    #    sym = dom.Symbol(u"")
+    #    subj.put(len(subj), [sym])
+    #    tail = head = Position.bottom(sym)
 
 def main(respond):
     global head, tail
@@ -61,9 +121,9 @@ def main(respond):
                 running = False
             elif event.type == SDL_MOUSEMOTION:
                 if event.motion.state != 0:
-                    pick(event.motion.x, event.motion.y, True)
+                    visual.pick(event.motion.x, event.motion.y, True)
             elif event.type == SDL_MOUSEBUTTONDOWN:
-                pick(event.motion.x, event.motion.y)
+                visual.pick(event.motion.x, event.motion.y)
             #elif event.type == SDL_MOUSEWHEEL:
                 #selection.visual.scroll_x += event.wheel.x * 10.0
                 #selection.visual.scroll_y += event.wheel.y * 10.0
@@ -169,17 +229,27 @@ def main(respond):
                 elif key == 'delete' and not head.subj.islist():
                     if head.index < len(head.subj):
                         head.subj.drop(head.index, head.index+1)
-                elif key == 'space' and head.subj.issymbol():
-                    subj = head.subj
-                    parent = subj.parent
-                    index = parent.index(subj)
-                    nsym = dom.Symbol(subj.drop(head.index, len(subj)))
-                    seq = parent.drop(index, index+1) + [nsym]
-                    if parent.label in ('@', '##'):
-                        parent.put(index, seq)
-                    else:
-                        parent.put(index, [dom.Literal(u'@', seq)])
-                    tail = head = Position(nsym, 0)
+                elif key == 'space' and visual.head.subj.issymbol():
+                    subj = visual.head.subj
+                    index = visual.head.index
+                    above = visual.head.above
+                    new_symbol = dom.Symbol(subj.drop(index, len(subj)))
+                    rule = workspace.active_schema(above.subj).recognize_in_context(above.subj)
+                    print "current rule", rule
+                    (above+1).put([new_symbol])
+                    visual.tail = visual.head = Position(new_symbol, 0)
+
+                    #newsym = dom.Symbol(subj.drop(head.index, len(subj))
+                    #subj = head.subj
+                    #parent = subj.parent
+                    #index = parent.index(subj)
+                    #nsym = dom.Symbol(subj.drop(head.index, len(subj)))
+                    #seq = parent.drop(index, index+1) + [nsym]
+                    #if parent.label in ('@', '##'):
+                    #    parent.put(index, seq)
+                    #else:
+                    #    parent.put(index, [dom.Literal(u'@', seq)])
+                    #tail = head = Position(nsym, 0)
                 elif text == ';' and head.subj.isstring():
                     subj = head.subj
                     parent = subj.parent
@@ -196,71 +266,22 @@ def main(respond):
                     parent.put(index, [string])
                     tail = head = Position(string, 0)
                 elif text is not None:
-                    if head.subj.islist():
+                    if visual.head.subj.islist():
+                        # should advance until this operation doesn't violate a schema.
                         blank = dom.Symbol(u"")
-                        head.put([blank])
-                        head = Position(blank, 0)
-                    head.subj.put(head.index, text)
-                    tail = head = Position(head.subj, head.index+1)
+                        visual.head.put([blank])
+                        visual.head = Position(blank, 0)
+                    visual.head.put(text)
+                    visual.tail = visual.head = visual.head+1
             except Exception:
                 traceback.print_exc()
         paint(time.time())
         SDL_GL_SwapWindow(window)
 
-def pick(x, y, drag=False):
-    global head, tail
-    nearest = None
-    distance = 500**4
-    for rootbox in rootboxes:
-        for subbox in rootbox.traverse():
-            if subbox.subj is not None:
-                x0, y0, x1, y1 = subbox.quad
-                dx = clamp(x, x0, x1) - x
-                dy = clamp(y, y0, y1) - y
-                d = dx**4 + dy**2
-                if d < distance:
-                    distance = d
-                    nearest = subbox
-    if nearest is not None:
-        head = Position(nearest.subj, nearest.index)
-        if not drag:
-            tail = head
-
 def paint(t):
-    global rootboxes
     width, height = get_window_size()
     glViewport(0, 0, width, height)
-    glClearColor(*env.background)
-    glClear(GL_COLOR_BUFFER_BIT)
-    compositor.clear()
-    main, outboxes = layout.page(workspace, env, document.body)
-    rootboxes = [main]
-    compositor.compose(main, 10, 10)
-    min_y = 10
-    for anchor, outbox in outboxes:
-        y = max(anchor.quad[1], min_y)
-        compositor.compose(outbox, max(320, int(main.quad[2])+10), int(y))
-        rootboxes.append(outbox)
-        min_y = outbox.quad[3] + 10
-
-    if head.subj is tail.subj:
-        selection = set()
-    else:
-        selection = set(leaves(head, tail))
-
-    for rootbox in rootboxes:
-        for subbox in rootbox.traverse():
-            if subbox.subj is head.subj and subbox.index == head.index:
-                x0, y0, x1, y1 = subbox.quad
-                compositor.decor((x0, y0, x0+2, y1), None, (1, 0, 0, 1))
-            if subbox.subj is tail.subj and subbox.index == tail.index:
-                x0, y0, x1, y1 = subbox.quad
-                compositor.decor((x0, y0, x0+2, y1), None, (0, 1, 0, 1))
-
-            if subbox.subj in selection:
-                compositor.decor(subbox.quad, None, (1, 0, 0, 0.2))
-
-    compositor.render(0, 0, width, height)
+    visual.render(0, 0, width, height)
 
 def clamp(x, low, high):
     return min(max(x, low), high)
