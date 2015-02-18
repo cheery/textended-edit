@@ -24,6 +24,15 @@ class Position(object):
     def put(self, contents):
         return self.subj.put(self.index, contents)
 
+    def remove(self):
+        above = self.above
+        above.subj.drop(above.index, above.index+1)
+
+    def replace(self, replacement):
+        above = self.above
+        above.subj.drop(above.index, above.index+1)
+        above.put(replacement)
+
     def __add__(self, number):
         return Position(self.subj, self.index+number)
 

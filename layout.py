@@ -27,7 +27,9 @@ def configure_schema(context, modeline):
 def layout_element(context, subj):
     def _layout(slot, subj):
         result = context.schema.recognize(subj)
-        if isinstance(result, ListRule):
+        if result == modeline:
+            return layout_modeline(context, subj)
+        elif isinstance(result, ListRule):
             name = result.label.replace('-', '_')
             if hasattr(context.layout, name):
                 return getattr(context.layout, name)(context, result.build(_layout, subj))
@@ -56,8 +58,6 @@ def layout_element(context, subj):
             pre = plaintext(context.env, '"', color=context.env.yellow)
             pos = plaintext(context.env, '"', color=context.env.yellow)
             return [hpack(pre + plaintext(context.env, subj, color=context.env.yellow) + pos)]
-        elif result == '##':
-            return layout_modeline(context, subj)
         else:
             return [hpack(plaintext(context.env, result + ":" + subj.label))]
     return _layout(None, subj)

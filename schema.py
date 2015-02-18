@@ -17,9 +17,9 @@ class Schema(object):
         if node.issymbol():
             return 'symbol'
         if node.label == '##' and modeline.validate(node):
-            return '##'
+            return modeline
         elif node.label == '#' and modechange.validate(node):
-            return '#'
+            return modechange
         elif len(node.label) > 0 and node.label in self.rules:
             rule = self.rules[node.label]
             if rule.validate(node):

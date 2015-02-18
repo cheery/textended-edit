@@ -12,6 +12,7 @@ import sdl_backend
 import sys
 import time
 import traceback
+import actions
 
 class Visual(object):
     def __init__(self, images, workspace, document, env):
@@ -103,11 +104,6 @@ def init():
     workspace = Workspace()
     document = workspace.get(sys.argv[1])
     visual = Visual(images, workspace, document, env)
-    #subj = head.subj
-    #if subj.islist():
-    #    sym = dom.Symbol(u"")
-    #    subj.put(len(subj), [sym])
-    #    tail = head = Position.bottom(sym)
 
 def main(respond):
     global head, tail
@@ -144,13 +140,13 @@ def main(respond):
                 if key == 's' and 'ctrl' in mod:
                     print "saved", document.name
                     dom.save(document.name, document.body)
-                if key == 'backspace' and 'ctrl' in mod:
-                    subj = head.subj
-                    parent = subj.parent
-                    if parent is not None:
-                        index = parent.index(subj)
-                        parent.drop(index, index+1)
-                        tail = head = Position.top(parent[index])
+                #if key == 'backspace' and 'ctrl' in mod:
+                #    subj = head.subj
+                #    parent = subj.parent
+                #    if parent is not None:
+                #        index = parent.index(subj)
+                #        parent.drop(index, index+1)
+                #        tail = head = Position.top(parent[index])
                 if key == 'f2':
                     if schema.has_modeline(visual.document.body):
                         visual.tail = visual.head = Position.bottom(visual.document.body[0])
@@ -158,8 +154,6 @@ def main(respond):
                         modeline = schema.modeline.blank()
                         visual.document.body.put(0, [modeline])
                         visual.tail = visual.head = Position.bottom(modeline)
-
-
                 if key == 'f12':
                     compositor.debug = not compositor.debug
 #                if key == 'a' and 'ctrl' in mod:
@@ -185,94 +179,36 @@ def main(respond):
 #                    symbol.put(head.index, text)
 #                    head = Position(head.pos, head.index + len(text))
 #                    tail = head
-                if text == ';':
-                    subj = head.subj
-                    above = head.above
-                    if subj.issymbol() and above is not None:
-                        head = above+1
-                    above = head.above
-                    if above is not None:
-                        blank = dom.Symbol(u"")
-                        (above+1).put([blank])
-                        head = tail = Position(blank, 0)
-                elif key == 'tab' and head.subj.issymbol():
-                    result = []
-                    active = workspace.active_schema(head.subj)
-                    name = head.subj[:]
-                    for rule in active.rules:
-                        if rule.startswith(name):
-                            result.append(rule)
-                    block = active.rules[result.pop(0)].blank()
-                    subj = head.subj
-                    parent = subj.parent
-                    index = parent.index(subj)
-                    parent.drop(index, index+1)
-                    parent.put(index, [block])
-                    tail = head = Position.top(block)
-                elif 'left alt' in mod and text != None and head.subj.isblank():
-                    result = []
-                    active = workspace.active_schema(head.subj)
-                    for rule in active.rules:
-                        if rule.startswith(text):
-                            result.append(rule)
-                    block = active.rules[result.pop(0)].blank()
-                    subj = head.subj
-                    parent = subj.parent
-                    index = parent.index(subj)
-                    parent.drop(index, index+1)
-                    parent.put(index, [block])
-                    tail = head = Position.top(block)
-                elif key == 'backspace' and not head.subj.islist():
-                    if head.index > 0:
-                        head.subj.drop(head.index-1, head.index)
-                        tail = head = Position(head.subj, head.index-1)
-                elif key == 'delete' and not head.subj.islist():
-                    if head.index < len(head.subj):
-                        head.subj.drop(head.index, head.index+1)
-                elif key == 'space' and visual.head.subj.issymbol():
-                    subj = visual.head.subj
-                    index = visual.head.index
-                    above = visual.head.above
-                    new_symbol = dom.Symbol(subj.drop(index, len(subj)))
-                    rule = workspace.active_schema(above.subj).recognize_in_context(above.subj)
-                    print "current rule", rule
-                    (above+1).put([new_symbol])
-                    visual.tail = visual.head = Position(new_symbol, 0)
+#                if text == ';':
+#                    subj = head.subj
+#                    above = head.above
+#                    if subj.issymbol() and above is not None:
+#                        head = above+1
+#                    above = head.above
+#                    if above is not None:
+#                        blank = dom.Symbol(u"")
+#                        (above+1).put([blank])
+#                        head = tail = Position(blank, 0)
 
-                    #newsym = dom.Symbol(subj.drop(head.index, len(subj))
-                    #subj = head.subj
-                    #parent = subj.parent
-                    #index = parent.index(subj)
-                    #nsym = dom.Symbol(subj.drop(head.index, len(subj)))
-                    #seq = parent.drop(index, index+1) + [nsym]
-                    #if parent.label in ('@', '##'):
-                    #    parent.put(index, seq)
-                    #else:
-                    #    parent.put(index, [dom.Literal(u'@', seq)])
-                    #tail = head = Position(nsym, 0)
-                elif text == ';' and head.subj.isstring():
-                    subj = head.subj
-                    parent = subj.parent
-                    index = parent.index(subj)+1
-                    sym = dom.Symbol(u"")
-                    parent.put(index, [sym])
-                    tail = head = Position(sym, 0)
-                elif text == '"' and head.subj.isblank():
-                    string = dom.Literal(u"", u"")
-                    subj = head.subj
-                    parent = subj.parent
-                    index = parent.index(subj)
-                    parent.drop(index, index+1)
-                    parent.put(index, [string])
-                    tail = head = Position(string, 0)
+                if key == 'tab':
+                    actions.completion(visual)
+                elif key == 'backspace':
+                    actions.delete_left(visual)
+                elif key == 'delete':
+                    actions.delete_right(visual)
+                elif key == 'space':
+                    actions.space(visual)
+#                elif text == ';' and head.subj.isstring():
+#                    subj = head.subj
+#                    parent = subj.parent
+#                    index = parent.index(subj)+1
+#                    sym = dom.Symbol(u"")
+#                    parent.put(index, [sym])
+#                    tail = head = Position(sym, 0)
+                elif text == '"':
+                    insert_string(visual)
                 elif text is not None:
-                    if visual.head.subj.islist():
-                        # should advance until this operation doesn't violate a schema.
-                        blank = dom.Symbol(u"")
-                        visual.head.put([blank])
-                        visual.head = Position(blank, 0)
-                    visual.head.put(text)
-                    visual.tail = visual.head = visual.head+1
+                    actions.insert_text(visual, text)
             except Exception:
                 traceback.print_exc()
         paint(time.time())
