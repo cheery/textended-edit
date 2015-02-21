@@ -37,7 +37,7 @@ def layout_element(context, subj):
             for subnode in subj:
                 tokens.append(Glue(2))
                 tokens.extend(_layout(None, subnode))
-            return [hpack(tokens)]
+            return vskip([hpack(tokens)])
         elif isinstance(result, Rule):
             name = result.label.replace('-', '_')
             if hasattr(context.layout, name):
@@ -46,14 +46,24 @@ def layout_element(context, subj):
         elif result in ('symbol', 'blank'):
             return plaintext(context.env, subj)
         elif result == 'list' and subj.label == '@':
+            index = len(context.outboxes)
             tokens = []
             for subnode in subj:
                 tokens.extend(_layout(None, subnode))
                 tokens.append(separator(context.env))
             outbox = Padding(packlines(tokens, 400), (4, 4, 4, 4), Patch9("assets/border-1px.png"))
             anchor = ImageBox(10, 10, 2, None, context.env.white)
-            context.outboxes.append((anchor, outbox))
+            context.outboxes.insert(index, (anchor, outbox))
             return [anchor]
+        elif result == 'list':
+            pre = plaintext(context.env, '{ ', color=context.env.blue)
+            pos = plaintext(context.env, ' }', color=context.env.blue)
+            tokens = []
+            for subnode in subj:
+                tokens.append(hpack(_layout(None, subnode)))
+                tokens.append(separator(context.env))
+            tokens.extend(sentinel(context.env, subj))
+            return pre + tokens + pos
         elif result == 'string':
             pre = plaintext(context.env, '"', color=context.env.yellow)
             pos = plaintext(context.env, '"', color=context.env.yellow)
@@ -84,6 +94,15 @@ def plaintext(env, text, fontsize=None, color=None):
 def sentinel(env, subj):
     if len(subj) == 0:
         yield ImageBox(10, 10, 5, None, env.gray).set_subj(subj, 0)
+        yield Glue(2)
+
+def vskip(boxes):
+    for box in boxes:
+        if box.hint is None:
+            box.hint = {'vskip': True}
+        else:
+            box.hint.update({'vskip': True})
+    return boxes
 
 def packlines(tokens, width):
     out = []

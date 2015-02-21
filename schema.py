@@ -35,7 +35,7 @@ class Schema(object):
     def recognize_in_context(self, node):
         if node.parent is None:
             return Star(self.toplevel)
-        if len(node.label) > 0:
+        if len(node.label) > 0 and node.label != '@':
             return self.recognize(node)
         rule = self.recognize_in_context(node.parent)
         if isinstance(rule, ListRule):
@@ -76,6 +76,15 @@ class Context(object):
             if len(match) > 0:
                 return [self] + match
         return []
+
+    @property
+    def all_valid_rules(self):
+        out = self.valid_rules.copy()
+        for ctx in self.valid_contexes:
+            out.update(ctx.all_valid_rules)
+        return out
+        
+
  
 class Symbol(object):
     def validate(self, node):

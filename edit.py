@@ -24,6 +24,7 @@ class Visual(object):
         self.head = Position.bottom(document.body)
         self.tail = self.head
         self.rootboxes = []
+        self.chain = ('', )
 
     def pick(self, x, y, drag=False):
         nearest = None
@@ -76,6 +77,11 @@ class Visual(object):
 
         self.compositor.render(scroll_x, scroll_y, width, height)
 
+    def setpos(self, head, tail=None, chain = ('', )):
+        self.head = head
+        self.tail = head if tail is None else tail
+        self.chain = chain
+
 def init():
     global window, context, images, workspace, visual
     SDL_Init(SDL_INIT_VIDEO)
@@ -106,7 +112,6 @@ def init():
     visual = Visual(images, workspace, document, env)
 
 def main(respond):
-    global head, tail
     keyboard = sdl_backend.KeyboardStream()
     event = SDL_Event()
     running = True
@@ -149,11 +154,11 @@ def main(respond):
                 #        tail = head = Position.top(parent[index])
                 if key == 'f2':
                     if schema.has_modeline(visual.document.body):
-                        visual.tail = visual.head = Position.bottom(visual.document.body[0])
+                        visual.setpos(Position.bottom(visual.document.body[0]))
                     else:
                         modeline = schema.modeline.blank()
                         visual.document.body.put(0, [modeline])
-                        visual.tail = visual.head = Position.bottom(modeline)
+                        visual.setpos(Position.bottom(modeline))
                 if key == 'f12':
                     compositor.debug = not compositor.debug
 #                if key == 'a' and 'ctrl' in mod:
@@ -190,14 +195,18 @@ def main(respond):
 #                        (above+1).put([blank])
 #                        head = tail = Position(blank, 0)
 
-                if key == 'tab':
+                if key == 'alt':
                     actions.completion(visual)
+                elif key == 'tab':
+                    actions.composition(visual)
                 elif key == 'backspace':
                     actions.delete_left(visual)
                 elif key == 'delete':
                     actions.delete_right(visual)
                 elif key == 'space':
                     actions.space(visual)
+                elif key == 'insert':
+                    actions.pluck(visual)
 #                elif text == ';' and head.subj.isstring():
 #                    subj = head.subj
 #                    parent = subj.parent
