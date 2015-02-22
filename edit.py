@@ -55,7 +55,7 @@ class Visual(object):
         min_y = 10
         for anchor, outbox in outboxes:
             y = max(anchor.quad[1], min_y)
-            self.compositor.compose(outbox, max(320, int(main.quad[2])+10), int(y))
+            self.compositor.compose(outbox, max(self.env.width, int(main.quad[2])+10), int(y))
             self.rootboxes.append(outbox)
             min_y = outbox.quad[3] + 10
 
@@ -117,6 +117,7 @@ def init():
         pink=(1.0, 0.0, 1.0, 1.0),
         gray=(0.5, 0.5, 0.5, 1.0),
         fontsize=12,
+        width=100,
         font=font.load("OpenSans.fnt"))
 
     workspace = Workspace()

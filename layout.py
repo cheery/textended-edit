@@ -12,7 +12,7 @@ def page(workspace, env, subj):
         tokens.extend(layout_element(context, node))
         tokens.append(separator(context.env))
     tokens.extend(sentinel(context.env, subj))
-    return packlines(tokens, 400), context.outboxes
+    return packlines(tokens, env.width), context.outboxes
 
 def configure_schema(context, modeline):
     schema_name = modeline[0][:]
@@ -53,7 +53,7 @@ def layout_element(context, subj):
             for subnode in subj:
                 tokens.extend(_layout(None, subnode))
                 tokens.append(separator(context.env))
-            outbox = Padding(packlines(tokens, 400), (4, 4, 4, 4), Patch9("assets/border-1px.png"))
+            outbox = Padding(packlines(tokens, context.env.width), (4, 4, 4, 4), Patch9("assets/border-1px.png"))
             anchor = ImageBox(10, 10, 2, None, context.env.white)
             context.outboxes.insert(index, (anchor, outbox))
             return [anchor]
