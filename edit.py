@@ -4,6 +4,7 @@ from OpenGL.GL import *
 from selection import Position
 from sdl2 import *
 from workspace import Workspace
+import boxmodel
 import dom
 import font
 import layout
@@ -75,12 +76,23 @@ class Visual(object):
                 if subbox.subj in selection:
                     self.compositor.decor(subbox.quad, None, (1, 0, 0, 0.2))
 
+        contextline = " -> ".join(textualcontext(self.head.subj, []))
+        contextline = boxmodel.hpack(self.env.font(contextline, 10))
+        self.compositor.compose(contextline, width - contextline.width, height - contextline.depth)
+
         self.compositor.render(scroll_x, scroll_y, width, height)
 
     def setpos(self, head, tail=None, chain = ('', )):
         self.head = head
         self.tail = head if tail is None else tail
         self.chain = chain
+
+def textualcontext(subj, result):
+    if subj.parent is not None:
+        result = textualcontext(subj.parent, result)
+    if len(subj.label) > 0 and not subj.issymbol():
+        result.append(subj.label)
+    return result
 
 def init():
     global window, context, images, workspace, visual
@@ -143,8 +155,8 @@ def main(respond):
 #                if key == 'tab':
 #                    head = tail = trim_plant(document, head, tail)
                 if key == 's' and 'ctrl' in mod:
-                    print "saved", document.name
-                    dom.save(document.name, document.body)
+                    print "saved", visual.document.name
+                    dom.save(visual.document.name, visual.document.body)
                 #if key == 'backspace' and 'ctrl' in mod:
                 #    subj = head.subj
                 #    parent = subj.parent
