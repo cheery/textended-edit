@@ -100,10 +100,6 @@ def space(visual):
     if (isinstance(rule, (Star,Plus)) and isinstance(rule.rule, Symbol)) or rule == 'list' or above.subj.label == '@':
         (above+1).put([new_symbol])
         visual.setpos(Position.top(new_symbol))
-#    elif isinstance(rule, (Star,Plus)):
-#        visual.head.remove()
-#        #above.put([dom.Literal(u"@", [subj, new_symbol])])
-#        visual.tail = visual.head = Position.top(new_symbol)
     else:
         print rule
         visual.setpos(next_field(visual.workspace, above, new_symbol))

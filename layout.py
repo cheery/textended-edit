@@ -1,5 +1,5 @@
 from boxmodel import *
-from schema import Rule, ListRule, modeline, modechange, blankschema, has_modeline
+from schema import Rule, Star, ListRule, modeline, modechange, blankschema, has_modeline
 import dom
 import importlib
 
@@ -29,6 +29,8 @@ def layout_element(context, subj):
         result = context.schema.recognize(subj)
         if result == modeline:
             return layout_modeline(context, subj)
+        elif isinstance(slot, Star):
+            return list(sentinel(context.env, subj))
         elif isinstance(result, ListRule):
             name = result.label.replace('-', '_')
             if hasattr(context.layout, name):

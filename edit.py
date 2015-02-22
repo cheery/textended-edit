@@ -195,7 +195,7 @@ def main(respond):
 #                        (above+1).put([blank])
 #                        head = tail = Position(blank, 0)
 
-                if key == 'alt':
+                if key == 'left alt':
                     actions.completion(visual)
                 elif key == 'tab':
                     actions.composition(visual)

@@ -1,17 +1,35 @@
 from boxmodel import *
+from layout import vskip, packlines, sentinel
 
 def toplevel(context, (name,)):
-    return [hpack(
-        plaintext(context.env, "toplevel ", color=context.env.blue) + name)]
+    return vskip([hpack(
+        plaintext(context.env, "toplevel ", color=context.env.blue) + name)])
 
 def bind(context, (lhs, rhs)):
-    return [hpack(lhs + plaintext(context.env, " --> ", color=context.env.blue) +
-        [vtop(hpacks(rhs))])]
+    return vskip([vpack([
+        hpack(
+            plaintext(context.env, "bind ", color=context.env.blue) +
+            lhs + 
+            plaintext(context.env, " to", color=context.env.blue)),
+        hpack([Glue(20), vtop(hpacks(rhs))]),
+        ])])
+#    return vskip([hpack(lhs + plaintext(context.env, " --> ", color=context.env.blue) +
+#        [vtop(hpacks(rhs))])])
 
 def rule(context, (name, lhs, rhs)):
-    sp = plaintext(context.env, " ", color=context.env.blue)
-    sp2 = plaintext(context.env, " ==> ", color=context.env.blue)
-    return [hpack(name + sp + [vtop(hpacks(lhs))] + sp2 + rhs)]
+    lb = plaintext(context.env, "  [", color=context.env.gray)
+    rb = plaintext(context.env, "]", color=context.env.gray)
+    tokens = []
+    for boxes in lhs:
+        if len(tokens) > 0:
+            tokens.extend(plaintext(context.env, ", ", color=context.env.gray))
+        tokens.extend(boxes)
+    return vskip([vpack([
+        hpack(name + lb + tokens + rb),
+        hpack([Glue(20)] + rhs),
+        ])])
+
+    return vskip([hpack(name + sp + [vtop(hpacks(lhs))] + sp2 + rhs)])
 
 def sequence(context, seq):
     tokens = []
@@ -22,10 +40,10 @@ def sequence(context, seq):
     return [hpack(tokens)]
 
 def star(context, (node,)):
-    return [hpack(node + plaintext(context.env, "*", color=context.env.blue))]
+    return [hpack(node + plaintext(context.env, "*", color=context.env.gray))]
 
 def plus(context, (node,)):
-    return [hpack(node + plaintext(context.env, "+", color=context.env.blue))]
+    return [hpack(node + plaintext(context.env, "+", color=context.env.gray))]
 
 def hpacks(seq):
     out = []

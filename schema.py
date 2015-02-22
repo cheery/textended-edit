@@ -152,6 +152,8 @@ class Star(ListRule):
         return all(self.rule.validate(subnode) for subnode in node)
 
     def build(self, function, node):
+        if len(node) == 0 and function.__name__ == '_layout':
+            return [function(self, node)]
         return [self.rule.build(function, subnode) for subnode in node]
 
     def __repr__(self):
