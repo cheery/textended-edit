@@ -84,9 +84,13 @@ class Context(object):
             out.update(ctx.all_valid_rules)
         return out
         
-
+    def apply(self, builder, node):
+        return builder.build_context(self, node)
  
 class Symbol(object):
+    def __init__(self, text=None):
+        self.text = text
+
     def validate(self, node):
         return node.issymbol()
 
@@ -94,13 +98,18 @@ class Symbol(object):
         return function(self, node)
 
     def __repr__(self):
+        if self.text is not None:
+            return repr(self.text)
         return "<symbol>"
 
     def blank(self):
-        return dom.Symbol(u"")
+        return dom.Symbol(self.text or u"")
 
     def match_term(self, result):
         return result in ('symbol', 'blank')
+        
+    def apply(self, builder, node):
+        return builder.build_terminal(self, node)
 
 class Rule(object):
     label = ''
@@ -141,6 +150,9 @@ class Sequence(ListRule):
 
     def descend(self, subj, obj):
         return self.sequence[subj.index(obj)]
+        
+    def apply(self, builder, node):
+        return builder.build_sequence(self, node)
 
 class Star(ListRule):
     def __init__(self, rule):
@@ -164,6 +176,9 @@ class Star(ListRule):
 
     def descend(self, subj, obj):
         return self.rule
+        
+    def apply(self, builder, node):
+        return builder.build_star(self, node)
 
 class Plus(ListRule):
     def __init__(self, rule):
@@ -187,6 +202,9 @@ class Plus(ListRule):
 
     def descend(self, subj, obj):
         return self.rule
+        
+    def apply(self, builder, node):
+        return builder.build_plus(self, node)
 
 class String(Rule):
     def validate(self, node):
@@ -203,6 +221,9 @@ class String(Rule):
 
     def match_term(self, result):
         return result == 'string'
+        
+    def apply(self, builder, node):
+        return builder.build_terminal(self, node)
 
 class Binary(Rule):
     def validate(self, node):
@@ -219,6 +240,9 @@ class Binary(Rule):
 
     def match_term(self, result):
         return result == 'binary'
+        
+    def apply(self, builder, node):
+        return builder.build_terminal(self, node)
 
 modeline = Plus(Symbol())
 modeline.label = '##'

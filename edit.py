@@ -230,7 +230,7 @@ def main(respond):
 #                    parent.put(index, [sym])
 #                    tail = head = Position(sym, 0)
                 elif text == '"':
-                    insert_string(visual)
+                    actions.insert_string(visual)
                 elif text is not None:
                     actions.insert_text(visual, text)
             except Exception:

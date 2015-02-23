@@ -153,15 +153,10 @@ def spaceWalk(visual, subj):
     raise Exception("not implemented correctly")
 
 def insert_string(visual):
-    raise Exception("not implemented")
-    head.subj.isblank()
+    assert visual.head.subj.isblank()
     string = dom.Literal(u"", u"")
-    subj = head.subj
-    parent = subj.parent
-    index = parent.index(subj)
-    parent.drop(index, index+1)
-    parent.put(index, [string])
-    tail = head = Position(string, 0)
+    visual.head.replace([string])
+    visual.setpos(Position(string, 0))
 
 def insert_text(visual, text):
     if visual.head.subj.islist():

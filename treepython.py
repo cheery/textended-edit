@@ -19,7 +19,7 @@ def forest_to_ast(forest):
     for node in forest:
         if node.label == '##':
             continue
-        body.extend(env(schema.toplevel, node))
+        body.extend(env.build_context(schema.toplevel, node))
     return ast.Module(body)
 
 class Env(object):
@@ -27,28 +27,41 @@ class Env(object):
         self.subj = None
         self.context = None
 
-    def __call__(self, slot, subj):
+    def build_context(self, slot, subj):
         result = schema.recognize(subj)
-        if isinstance(slot, Context):
-            match = slot.match(result)
-            if len(match) > 0:
-                self.subj = subj
-                self.context = match.pop()
-                if isinstance(result, str):
-                    fn = get_translator(self.context.name + '_' + result)
-                else:
-                    fn = get_translator(result.label)
+        match = slot.match(result)
+        if len(match) > 0:
+            self.subj = subj
+            self.context = match.pop()
+            if isinstance(result, str):
+                fn = get_translator(self.context.name + '_' + result)
+                result = fn(self, subj[:])
+            else:
+                fn = get_translator(result.label)
                 if isinstance(result, ListRule):
-                    result = fn(self, *result.build(self, subj))
+                    result = fn(self, *result.apply(self, subj))
                 else:
-                    result = fn(self, subj[:])
-                for context in reversed(match):
-                    result = get_translator(context.name + '_' + self.context.name)(self, result)
-                    self.context = context
-                return result
-        elif slot.match_term(subj):
+                    result = fn(self, result.apply(self, subj))
+            for context in reversed(match):
+                result = get_translator(context.name + '_' + self.context.name)(self, result)
+                self.context = context
+            return result
+        else:
+            raise Exception("syn error {}, expected {}".format(subj, slot))
+
+    def build_terminal(self, term, subj):
+        if term.match_term(subj):
             return subj[:]
         raise Exception("syn error {}, expected {}".format(subj, slot))
+
+    def build_sequence(self, sequence, subj):
+        return [rule.apply(self, node) for rule, node in zip(sequence, subj)]
+
+    def build_star(self, star, subj):
+        return [star.rule.apply(self, node) for node in subj]
+
+    def build_plus(self, plus, subj):
+        return [plus.rule.apply(self, node) for node in subj]
 
     def new_node(self, cls, *args, **kwargs):
         node = cls(*args, **kwargs)
