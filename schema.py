@@ -88,8 +88,10 @@ class Context(object):
         return builder.build_context(self, node)
  
 class Symbol(object):
-    def __init__(self, text=None):
+    def __init__(self, text=None, precedence=None, precedence_chaining='left'):
         self.text = text
+        self.precedence = precedence
+        self.precedence_chaining = 'left'
 
     def validate(self, node):
         return node.issymbol()

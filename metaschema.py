@@ -26,6 +26,8 @@ schema = Schema(c_rule, {
         Symbol(),
         Star(c_term),
     ])),
+    'precedence-left': rule([c_term], Sequence([String(), Symbol()])),
+    'precedence-right': rule([c_term], Sequence([String(), Symbol()])),
 }, {c_rule, c_expr, c_term})
 
 def load(tree):
@@ -89,6 +91,12 @@ class Builder(object):
             if result == 'string':
                 return Symbol(node[:])
         if slot is c_term:
+            if result is schema['precedence-left']:
+                sym, num = node
+                return Symbol(sym[:], precedence=num[:], precedence_chaining='left')
+            if result is schema['precedence-right']:
+                sym, num = node
+                return Symbol(sym[:], precedence=num[:], precedence_chaining='right')
             if result == 'symbol':
                 if node[:] == 'symbol':
                     return Symbol()
