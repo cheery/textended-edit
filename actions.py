@@ -86,8 +86,11 @@ def delete_left(visual):
     if isinstance(rule, (Star, Plus)) and isinstance(rule.rule, (Symbol, Context)) or above.subj.label == '@':
         if above.index > 0:
             prev = Position.bottom(above.subj[above.index - 1])
-            prev.put(subj[:])
-            visual.head.remove()
+            if not prev.subj.islist():
+                prev.put(subj[:])
+                visual.head.remove()
+            elif visual.head.subj.isblank():
+                visual.head.remove()
             visual.setpos(prev)
         elif isinstance(rule, Star):
             visual.head.remove()
