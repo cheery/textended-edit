@@ -174,6 +174,8 @@ def main(respond):
                         visual.setpos(Position.bottom(modeline))
                 if key == 'f12':
                     compositor.debug = not compositor.debug
+                if key == 'pause':
+                    reload(actions)
 #                if key == 'a' and 'ctrl' in mod:
 #                    head, tail = expand_selection(document, head, tail)
 #                if key == 'f' and 'ctrl' in mod:

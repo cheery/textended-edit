@@ -146,6 +146,9 @@ class Symbol(Node):
     def issymbol(self):
         return True
 
+    def is_empty(self):
+        return len(self) == 0
+
 class Literal(Node):
     def __init__(self, label, contents, ident=""):
         self.ident = ident
@@ -192,6 +195,11 @@ class Literal(Node):
     
     def __len__(self):
         return len(self.contents)
+
+    def is_empty(self):
+        if self.islist():
+            return all(it.is_empty() for it in self)
+        return len(self) == 0
 
     def drop(self, start, stop, undo=False):
         start = max(0, min(len(self), start))

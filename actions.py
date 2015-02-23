@@ -1,5 +1,5 @@
 from selection import Position
-from schema import Star, Plus, Symbol, Context
+from schema import Sequence, Star, Plus, Symbol, Context
 import dom
 import parsing
 
@@ -74,11 +74,39 @@ def pluck(visual):
     visual.setpos(Position.bottom(block))
 
 def delete_left(visual):
-    raise Exception("not implemented")
-#    and not head.subj.islist():
-#    if head.index > 0:
-#        head.subj.drop(head.index-1, head.index)
-#        tail = head = Position(head.subj, head.index-1)
+    assert visual.head == visual.tail
+    subj = visual.head.subj
+    index = visual.head.index
+    above = visual.head.above
+    if index > 0:
+        visual.head.subj.drop(visual.head.index-1, visual.head.index)
+        visual.setpos(visual.head-1)
+        return
+    rule = visual.workspace.active_schema(above.subj).recognize_in_context(above.subj)
+    if isinstance(rule, (Star, Plus)) and isinstance(rule.rule, (Symbol, Context)) or above.subj.label == '@':
+        if above.index > 0:
+            prev = Position.bottom(above.subj[above.index - 1])
+            prev.put(subj[:])
+            visual.head.remove()
+            visual.setpos(prev)
+        elif isinstance(rule, Star):
+            visual.head.remove()
+            visual.setpos(above)
+        else:
+            leftDeleteWalk(visual, subj.parent)
+    else:
+        leftDeleteWalk(visual, subj)
+
+def leftDeleteWalk(visual, subj):
+    if subj.is_empty() and (not subj.issymbol()) and len(subj.label) > 0:
+        new_symbol = dom.Symbol(u"")
+        Position(subj, 0).replace([new_symbol])
+        return visual.setpos(Position(new_symbol, 0))
+    index = subj.parent.index(subj)
+    if index == 0:
+        return leftDeleteWalk(visual, subj.parent)
+    else:
+        return visual.setpos(Position.bottom(subj.parent[index-1]))
 
 def delete_right(visual):
     raise Exception("not implemented")
@@ -87,35 +115,39 @@ def delete_right(visual):
 #                        head.subj.drop(head.index, head.index+1)
 
 def space(visual):
-    assert visual.head.subj.issymbol()
+    assert visual.head == visual.tail
     subj = visual.head.subj
     index = visual.head.index
     above = visual.head.above
-    if subj.isblank():
-        visual.head.remove()
-        visual.tail = visual.head = next_field(visual.workspace, above, subj)
-        return
-    new_symbol = dom.Symbol(subj.drop(index, len(subj)))
     rule = visual.workspace.active_schema(above.subj).recognize_in_context(above.subj)
-    if (isinstance(rule, (Star,Plus)) and isinstance(rule.rule, Symbol)) or rule == 'list' or above.subj.label == '@':
+    if isinstance(rule, (Star, Plus)) and isinstance(rule.rule, (Symbol, Context)) or above.subj.label == '@':
+        if subj.isblank() and subj.parent.parent is not None:
+            spaceWalk(visual, subj.parent)
+            Position(subj, 0).remove()
+        else:
+            new_symbol = dom.Symbol(subj.drop(index, len(subj)))
+            (above+1).put([new_symbol])
+            visual.setpos(Position.top(new_symbol))
+    else:
+        spaceWalk(visual, subj)
+
+def spaceWalk(visual, subj):
+    above = Position(subj, 0).above
+    rule = visual.workspace.active_schema(above.subj).recognize_in_context(above.subj)
+    if isinstance(rule, Sequence):
+        if above.index+1 < len(above.subj):
+            visual.setpos(Position.top(above.subj[above.index+1]))
+            return
+        else:
+            return spaceWalk(visual, above.subj)
+    if isinstance(rule, (Star, Plus)) and isinstance(rule.rule, (Symbol, Context)):
+        new_symbol = dom.Symbol(u"")
         (above+1).put([new_symbol])
         visual.setpos(Position.top(new_symbol))
-    else:
-        print rule
-        visual.setpos(next_field(visual.workspace, above, new_symbol))
-
-def next_field(workspace, position, new_symbol):
-    above = position.above
-    if above is None:
-        (position+1).put([new_symbol])
-        return Position.top(new_symbol)
-    rule = workspace.active_schema(above.subj).recognize_in_context(above.subj)
-    if isinstance(rule, (Star, Plus)):
-        (above+1).put([new_symbol])
-        return Position.top(new_symbol)
-    else:
-        raise Exception(repr(rule))
-        return next_field(workspace, above)
+        return
+    print visual.head.subj
+    print visual.head.above.subj
+    raise Exception("not implemented correctly")
 
 def insert_string(visual):
     raise Exception("not implemented")
