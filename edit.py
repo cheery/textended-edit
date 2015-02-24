@@ -13,6 +13,28 @@ class Document(object):
     def __init__(self, terminals):
         self.terminals = list(terminals)
 
+    def join_left(self, position):
+        pos = self.terminals.index(position.terminal)
+        if pos == 0:
+            raise Exception("no symbols to join")
+        lhs = self.terminals[pos-1]
+        rhs = position.terminal
+        index = len(lhs)
+        self.terminals.remove(rhs)
+        lhs.string = lhs.string + rhs.string
+        return Position(lhs, index)
+
+    def join_right(self, position):
+        pos = self.terminals.index(position.terminal)
+        if pos+1 >= len(self.terminals):
+            raise Exception("no symbols to join")
+        lhs = position.terminal
+        rhs = self.terminals[pos+1]
+        index = len(lhs)
+        self.terminals.remove(lhs)
+        rhs.string = lhs.string + rhs.string
+        return Position(rhs, index)
+
     def split(self, position):
         pos = self.terminals.index(position.terminal)
         lhs = position.terminal
@@ -175,7 +197,11 @@ def main(respond):
                 keyboard.push_event(event)
         for key, mod, text in keyboard:
             try:
-                if text == ' ':
+                if key == 'backspace':
+                    visual.setpos(visual.document.join_left(visual.head))
+                elif key == 'delete':
+                    visual.setpos(visual.document.join_right(visual.head))
+                elif text == ' ':
                     visual.setpos(visual.document.split(visual.head)[1])
                 elif text is not None:
                     visual.setpos(visual.document.puttext(visual.head, text))
