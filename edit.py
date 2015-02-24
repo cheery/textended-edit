@@ -1,13 +1,46 @@
+from boxmodel import *
 from compositor import Compositor
 from ctypes import byref
 from OpenGL.GL import *
 from sdl2 import *
-import boxmodel
 import font
 import sdl_backend
 import sys
 import time
 import traceback
+
+class Document(object):
+    def __init__(self, terminals):
+        self.terminals = list(terminals)
+
+    def split(self, position):
+        pos = self.terminals.index(position.terminal)
+        lhs = position.terminal
+        rhs = Terminal(position.terminal.string[position.index:])
+        lhs.string = position.terminal.string[:position.index] 
+        self.terminals.insert(pos+1, rhs)
+        return Position(lhs), Position(rhs, 0)
+
+    def puttext(self, position, text):
+        pos = self.terminals.index(position.terminal)
+        terminal = position.terminal
+        terminal.string = terminal.string[:position.index] + text + terminal.string[position.index:]
+        return Position(position.terminal, position.index+len(text))
+
+class Terminal(object):
+    def __init__(self, string):
+        self.string = string
+
+    def __getitem__(self, index):
+        return self.string[index]
+
+    def __len__(self):
+        return len(self.string)
+
+class Position(object):
+    def __init__(self, terminal, index=None):
+        self.terminal = terminal
+        self.index = len(terminal.string) if index is None else index
 
 class Visual(object):
     def __init__(self, images, options):
@@ -15,6 +48,9 @@ class Visual(object):
         self.images = images
         self.options = options
         self.rootboxes = []
+        self.document = Document(map(Terminal, ["Hello", "Hello", "nstohx", "stohuxsnnt", "sthtnh", "sththtth", "sthnth"]))
+        self.head = Position(self.document.terminals[-1])
+        self.tail = self.head
 
     def pick(self, x, y, drag=False):
         nearest = None
@@ -31,14 +67,39 @@ class Visual(object):
                         nearest = subbox
         if nearest is not None:
             if drag:
-                pass # self.tail = self.head
+                self.head = Position(nearest.subj, nearest.index)
             else:
-                pass # self.head =
+                self.tail = self.head = Position(nearest.subj, nearest.index)
+
+    def setpos(self, head, tail=None):
+        self.head = head
+        self.tail = head if tail is None else tail
 
     def render(self, scroll_x, scroll_y, width, height):
         glClearColor(*self.options['background'])
         glClear(GL_COLOR_BUFFER_BIT)
         self.compositor.clear()
+
+        font = self.options['font']
+        font_size = self.options['font_size']
+        lines = []
+        boxes = []
+        for terminal in self.document.terminals:
+            if len(boxes) > 0:
+                boxes.extend(font(" ", font_size))
+            if len(terminal) == 0:
+                sentinel = hpack(font('_', font_size, color=(1.0, 1.0, 1.0, 0.5)))
+                sentinel.set_subj(terminal, 0)
+                boxes.append(sentinel)
+            else:
+                boxes.extend(font(terminal, font_size))
+            if sum(box.width for box in boxes) > self.options['page_width']:
+                lines.append(hpack(boxes))
+                boxes = []
+        lines.append(hpack(boxes))
+        main = vpack(lines)
+        self.rootboxes = [main]
+        self.compositor.compose(main, 10, 10 + main.height)
 #        main, outboxes = layout.page(self.workspace, self.env, self.document.body)
 #        self.rootboxes = [main]
 #        self.compositor.compose(main, 10, 10)
@@ -54,14 +115,14 @@ class Visual(object):
 #        else:
 #            selection = set(leaves(self.head, self.tail))
 #
-#        for rootbox in self.rootboxes:
-#            for subbox in rootbox.traverse():
-#                if subbox.subj is self.head.subj and subbox.index == self.head.index:
-#                    x0, y0, x1, y1 = subbox.quad
-#                    self.compositor.decor((x0, y0, x0+2, y1), None, (1, 0, 0, 1))
-#                if subbox.subj is self.tail.subj and subbox.index == self.tail.index:
-#                    x0, y0, x1, y1 = subbox.quad
-#                    self.compositor.decor((x0, y0, x0+2, y1), None, (0, 1, 0, 1))
+        for rootbox in self.rootboxes:
+            for subbox in rootbox.traverse():
+                if subbox.subj is self.head.terminal and subbox.index == self.head.index:
+                    x0, y0, x1, y1 = subbox.quad
+                    self.compositor.decor((x0, y0, x0+2, y1), None, (1, 0, 0, 1))
+                if subbox.subj is self.tail.terminal and subbox.index == self.tail.index:
+                    x0, y0, x1, y1 = subbox.quad
+                    self.compositor.decor((x0, y0, x0+2, y1), None, (0, 1, 0, 1))
 #
 #                if subbox.subj in selection:
 #                    self.compositor.decor(subbox.quad, None, (1, 0, 0, 0.2))
@@ -114,7 +175,12 @@ def main(respond):
                 keyboard.push_event(event)
         for key, mod, text in keyboard:
             try:
-                print key, mod, text
+                if text == ' ':
+                    visual.setpos(visual.document.split(visual.head)[1])
+                elif text is not None:
+                    visual.setpos(visual.document.puttext(visual.head, text))
+                else:
+                    print key, mod, text
             except Exception:
                 traceback.print_exc()
         paint(time.time())
