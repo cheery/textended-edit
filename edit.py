@@ -13,6 +13,24 @@ class Document(object):
     def __init__(self, terminals):
         self.terminals = list(terminals)
 
+    def collapse(self, head, tail):
+        headpos = self.terminals.index(head.terminal)
+        tailpos = self.terminals.index(tail.terminal)
+        start = min(headpos, tailpos)
+        stop  = max(headpos, tailpos) + 1
+        if start + 1 == stop:
+            terminal = head.terminal
+            start = min(head.index, tail.index)
+            stop = max(head.index, tail.index)
+            dropped = terminal.string[start:stop]
+            terminal.string = terminal.string[:start] + terminal.string[stop:]
+            return Position(terminal, start), dropped
+        else:
+            dropped = self.terminals[start:stop]
+            terminal = Terminal("")
+            self.terminals[start:stop] = [terminal]
+            return Position(terminal), dropped
+
     def join_left(self, position):
         pos = self.terminals.index(position.terminal)
         if pos == 0:
@@ -43,15 +61,25 @@ class Document(object):
         self.terminals.insert(pos+1, rhs)
         return Position(lhs), Position(rhs, 0)
 
-    def puttext(self, position, text):
+    def put(self, position, data):
         pos = self.terminals.index(position.terminal)
         terminal = position.terminal
-        terminal.string = terminal.string[:position.index] + text + terminal.string[position.index:]
-        return Position(position.terminal, position.index+len(text))
+        if isinstance(data, list):
+            assert len(data) > 0
+            if len(terminal) != 0:
+                raise Exception("The terminal isn't empty.")
+            self.terminals[pos:pos+1] = [item.copy() for item in data]
+            return Position(self.terminals[pos + len(data) - 1])
+        else:
+            terminal.string = terminal.string[:position.index] + data + terminal.string[position.index:]
+            return Position(position.terminal, position.index+len(data))
 
 class Terminal(object):
     def __init__(self, string):
         self.string = string
+
+    def copy(self):
+        return Terminal(self.string)
 
     def __getitem__(self, index):
         return self.string[index]
@@ -64,6 +92,17 @@ class Position(object):
         self.terminal = terminal
         self.index = len(terminal.string) if index is None else index
 
+    def __eq__(self, other):
+        return self.terminal is other.terminal and self.index == other.index
+
+    @property
+    def left_edge(self):
+        return self.index == 0
+
+    @property
+    def right_edge(self):
+        return self.index == len(self.terminal.string)
+
 class Visual(object):
     def __init__(self, images, options):
         self.compositor = Compositor(images)
@@ -73,6 +112,7 @@ class Visual(object):
         self.document = Document(map(Terminal, ["Hello", "Hello", "nstohx", "stohuxsnnt", "sthtnh", "sththtth", "sthnth"]))
         self.head = Position(self.document.terminals[-1])
         self.tail = self.head
+        self.clipboard = ""
 
     def pick(self, x, y, drag=False):
         nearest = None
@@ -197,14 +237,34 @@ def main(respond):
                 keyboard.push_event(event)
         for key, mod, text in keyboard:
             try:
-                if key == 'backspace':
-                    visual.setpos(visual.document.join_left(visual.head))
+                if key == 'x' and 'ctrl' in mod:
+                    pos, visual.clipboard = visual.document.collapse(visual.head, visual.tail)
+                    visual.setpos(pos)
+                elif key == 'v' and 'ctrl' in mod:
+                    visual.setpos(visual.document.collapse(visual.head, visual.tail)[0])
+                    visual.setpos(visual.document.put(visual.head, visual.clipboard))
+                elif key == 'backspace':
+                    if visual.head == visual.tail and visual.head.left_edge:
+                        visual.setpos(visual.document.join_left(visual.head))
+                    else:
+                        if visual.head == visual.tail:
+                            visual.head = Position(visual.head.terminal, visual.head.index-1)
+                        visual.setpos(visual.document.collapse(visual.head, visual.tail)[0])
                 elif key == 'delete':
-                    visual.setpos(visual.document.join_right(visual.head))
+                    if visual.head == visual.tail and visual.head.right_edge:
+                        visual.setpos(visual.document.join_right(visual.head))
+                    else:
+                        if visual.head == visual.tail:
+                            visual.head = Position(visual.head.terminal, visual.head.index+1)
+                        visual.setpos(visual.document.collapse(visual.head, visual.tail)[0])
                 elif text == ' ':
-                    visual.setpos(visual.document.split(visual.head)[1])
+                    pos, dropped = visual.document.collapse(visual.head, visual.tail)
+                    visual.setpos(pos)
+                    if not isinstance(dropped, list):
+                        visual.setpos(visual.document.split(visual.head)[1])
                 elif text is not None:
-                    visual.setpos(visual.document.puttext(visual.head, text))
+                    visual.setpos(visual.document.collapse(visual.head, visual.tail)[0])
+                    visual.setpos(visual.document.put(visual.head, text))
                 else:
                     print key, mod, text
             except Exception:
