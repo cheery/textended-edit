@@ -1,5 +1,6 @@
 from sdl2 import *
 from sdl2.sdlimage import *
+from ctypes import c_int, byref
 
 modifiers = {
     KMOD_LSHIFT:  'left shift',
@@ -64,3 +65,9 @@ class ImageResources(object):
         if path in self.cache:
             image = self.cache.pop(path)
             SDL_FreeSurface(image)
+
+def get_window_size(window):
+    width = c_int()
+    height = c_int()
+    SDL_GetWindowSize(window, byref(width), byref(height))
+    return width.value, height.value
