@@ -28,6 +28,8 @@ class Workspace(object):
             document = dom.Document(dom.ListCell("", dom.load(path)), self)
             self.documents[path] = document
             return document
+        elif not os.path.isdir(os.path.dirname(path)):
+            raise Exception("Not a directory: {}".format(os.path.dirname(path)))
         elif create:
             document = dom.Document(dom.ListCell("", []), self)
             self.documents[path] = document

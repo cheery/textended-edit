@@ -1,10 +1,10 @@
 # Structure Editor, for .t+ -files.
 
-If you decide to try it, make sure you've got pysdl2, pyopengl and textended. I've tried it with python 2.7
+If you decide to try it, make sure you've got pysdl2, pysdl2 image, pyopengl and textended. I've tried it with python 2.7
 
 On ubuntu the dependencies can be satisfied with:
 
-    sudo apt-get install python-opengl
+    sudo apt-get install python-opengl libsdl2-2.0-0 libsdl2-image-2.0-0
     sudo pip install pysdl2
 
 You can obtain textended by:
@@ -15,7 +15,9 @@ It's just a module in a different repository so it's enough if you place the clo
 
 On Windows platform you might not find SDL2_image. It is available in: https://www.libsdl.org/projects/SDL_image/ Place it into the PYSDL2_DLL_PATH.
 
-The editor is implemented as a python script `edit.py`. It doesn't run without an argument. You can pass it any file ending with `.t+`. Many files are in outdated format, but all of them should open.
+The editor is implemented as a python script `edit.py`. It doesn't run without an argument. You can pass it any file ending with `.t+`. Many files are in outdated format, but all of them should open. Here's an example command that should run:
+
+    python edit.py samples/distracted_99_bottles.t+
 
 Specification:
 
