@@ -14,6 +14,10 @@ Related blog posts:
  * http://boxbase.org/entries/2015/jan/19/textended-layout-engine/
  * http://boxbase.org/entries/2015/feb/9/textended-schema/
 
+Other resources:
+
+ * [Draft of the specification](https://docs.google.com/document/d/11IUQ77CNGlKYNRPlC2a9ZDM6PqHlUvd4R5-ugqcIbnM/edit?usp=sharing)
+
 There's an IRC channel #essence in irc.freenode.net, for those who like to discuss about visual programming/structured editing.
 
 ## Screenshots
