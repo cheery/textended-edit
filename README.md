@@ -7,11 +7,11 @@ On ubuntu the dependencies can be satisfied with:
     sudo apt-get install python-opengl
     sudo pip install pysdl2
 
-You can obtain textended by cloning it inside the repository:
+You can obtain textended by:
 
     git clone https://github.com/cheery/textended/
 
-It is structured in a way that the editor is able to use it.
+It's just a module in a different repository so it's enough if you place the cloned directory inside the editor's repository.
 
 On Windows platform you might not find SDL2_image. It is available in: https://www.libsdl.org/projects/SDL_image/ Place it into the PYSDL2_DLL_PATH.
 
