@@ -17,15 +17,18 @@ On Windows platform you might not find SDL2_image. It is available in: https://w
 
 The editor is implemented as a python script `edit.py`. It doesn't run without an argument. You can pass it any file ending with `.t+`. Many files are in outdated format, but all of them should open.
 
+Specification:
+
+ * [Draft of the specification](https://docs.google.com/document/d/11IUQ77CNGlKYNRPlC2a9ZDM6PqHlUvd4R5-ugqcIbnM/edit?usp=sharing)
+
 Related blog posts: 
 
  * http://boxbase.org/entries/2014/dec/29/first-editor-release/
  * http://boxbase.org/entries/2015/jan/19/textended-layout-engine/
+ * http://boxbase.org/entries/2015/feb/2/bottom-up-down-dissonance/
  * http://boxbase.org/entries/2015/feb/9/textended-schema/
-
-Other resources:
-
- * [Draft of the specification](https://docs.google.com/document/d/11IUQ77CNGlKYNRPlC2a9ZDM6PqHlUvd4R5-ugqcIbnM/edit?usp=sharing)
+ * http://boxbase.org/entries/2015/feb/16/projectional-repl/
+ * http://boxbase.org/entries/2015/feb/23/why-cfg-as-schema/
 
 There's an IRC channel #essence in irc.freenode.net, for those who like to discuss about visual programming/structured editing.
 
