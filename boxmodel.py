@@ -1,4 +1,3 @@
-from selection import Position
 
 class Frame(object):
     parent = None
@@ -191,7 +190,7 @@ def pick_nearest(box, x, y):
         elif node.subj is not None:
             dx, dy = delta_point_quad(x, y, node.quad)
             offset = (x - (node.quad[0] + node.quad[2])*0.5) > 0
-            return Position(node.subj, node.index + offset), dx**2 + dy**4
+            return (node.subj, node.index + offset), dx**2 + dy**4
         else:
             return None, float('inf')
     return nearest(box, 500**4)[0]
