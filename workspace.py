@@ -1,11 +1,12 @@
-#from schema import modeline, modechange, blankschema, has_modeline
+from grammar import *
 import dom
+import metagrammar
 import sys, os
-#import metaschema
-#
+
 class Workspace(object):
     def __init__(self):
         self.documents = {}
+        self.grammars = {}
 #        self.unbound = []
 #        self.copybuf = None
 #        self.schema_cache = {}
@@ -21,6 +22,7 @@ class Workspace(object):
 #        document.name = name
 #        return document
 #
+
     def get(self, path, create=True):
         if path in self.documents:
             return self.documents[path]
@@ -37,25 +39,19 @@ class Workspace(object):
         else:
             raise Exception("No such file: {}".format(path))
 
-#    def get_schema(self, name):
-#        if name == 'schema':
-#            return metaschema.schema
-#        path = os.path.join('schemas', name + '.t+')
-#        if os.path.isfile(path):
-#            if path in self.schema_cache:
-#                return self.schema_cache[path]
-#            else:
-#                schema = self.schema_cache[path] = metaschema.load(dom.load(path))
-#                return schema
-#        return blankschema
-#
-#    def active_schema(self, subj):
-#        while subj.parent is not None:
-#            subj = subj.parent
-#            if subj.label == '#' and modechange.validate(subj):
-#                modeline = subj[0]
-#                return self.get_schema(modeline[0][:])
-#        if has_modeline(subj):
-#            modeline = subj[0]
-#            return self.get_schema(modeline[0][:])
-#        return blankschema
+    def get_grammar(self, name):
+        if name == 'grammar':
+            return metagrammar.grammar
+        path = os.path.join('grammars', name + '.t+')
+        if os.path.isfile(path):
+            if path not in self.grammars:
+                self.grammars[path] = metagrammar.load(dom.load(path))
+            return self.grammars[path]
+
+    def grammar_of(self, cell):
+        while cell.parent is not None:
+            cell = cell.parent
+            if modeblock.validate(cell):
+                return self.get_grammar(cell[0][0][:])
+        if modeline.validate(cell[0]):
+            return self.get_grammar(cell[0][0][:])

@@ -7,6 +7,9 @@ def interpret(visual, keyboard):
             print key, mod, text
             if key == 'escape':
                 sys.exit(0)
+            # cell.context
+            # cell.grammar
+            # cell.rule
         except Exception:
             traceback.print_exc()
 

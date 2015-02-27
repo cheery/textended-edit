@@ -23,7 +23,7 @@ def layout_cell(cell, options):
         return hpack(plain("..", options, 'color_empty')).set_subj(cell, 0)
     boxes = []
     boxes.extend(plain("[", options, 'color_notation'))
-    boxes.extend(plain(cell.label, options, 'color_notation'))
+    boxes.extend(plain(cell.label, options, 'color_notation' if cell.rule else 'color_notation_error'))
     for subcell in cell:
         boxes.extend(plain(" ", options, 'color_notation'))
         boxes.append(layout_cell(subcell, options))

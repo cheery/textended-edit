@@ -37,6 +37,17 @@ class Cell(object):
     label = ""
 
     @property
+    def context(self):
+        grammar = self.document.workspace.grammar_of(self)
+        if grammar is not None:
+            return grammar.recognize_context(self)
+
+    # this may or may not be needed
+    @property
+    def grammar(self):
+        return self.document.workspace.grammar_of(self)
+
+    @property
     def hierarchy(self):
         result = []
         while self is not None:
@@ -59,6 +70,12 @@ class Cell(object):
         else:
             return common, other, self
 
+    @property
+    def rule(self):
+        grammar = self.document.workspace.grammar_of(self)
+        if grammar is not None:
+            return grammar.recognize(self)
+
     def is_leftmost(self):
         return self.parent and self.parent.index(self) == 0
 
@@ -76,6 +93,12 @@ class TextCell(Cell):
 
     def __len__(self):
         return len(self.contents)
+
+    def __repr__(self):
+        if self.symbol:
+            return "<TextCell {}>".format(self.contents)
+        else:
+            return "<TextCell {!r}>".format(self.contents)
 
     def copy(self):
         return self.__class__(self.contents, self.mode, self.ident)
@@ -119,6 +142,9 @@ class ListCell(Cell):
     
     def __len__(self):
         return len(self.contents)
+
+    def __repr__(self):
+        return "<ListCell {}>".format(self.label)
 
     def copy(self):
         return self.__class__(self.label, self.yank(0, len(self)), self.ident)

@@ -126,6 +126,7 @@ def init():
         white=(1, 1, 1, 1),
         color_string=(1, 1, 0.5, 1.0),
         color_notation=(1.0, 1.0, 1.0, 0.2),
+        color_notation_error=(1.0, 0.5, 0.5, 0.2),
         color_empty=(1.0, 1.0, 1.0, 0.5),
         )
     workspace = Workspace()
