@@ -8,6 +8,8 @@ def page(document, options):
     lines = []
     for cell in document.body:
         lines.append(layout_cell(cell, options))
+    if document.body.is_external():
+        lines.append(hpack(plain("._.", options, 'color_empty')).set_subj(document.body, 0))
     return vpack(lines), []
 
 def layout_cell(cell, options):
@@ -20,7 +22,7 @@ def layout_cell(cell, options):
         post = plain('"', options, 'color_string')
         return hpack(pre + plain(cell, options, 'color_string') + post)
     if cell.is_external():
-        return hpack(plain("..", options, 'color_empty')).set_subj(cell, 0)
+        return hpack(plain("._.", options, 'color_empty')).set_subj(cell, 0)
     boxes = []
     boxes.extend(plain("[", options, 'color_notation'))
     boxes.extend(plain(cell.label, options, 'color_notation' if cell.rule else 'color_notation_error'))

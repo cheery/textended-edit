@@ -3,32 +3,32 @@ import textended
 
 class Document(object):
     def __init__(self, body, workspace):
-        self.nodes = {}
+        self.cells = {}
         self.body = self._insert(body)
         self.workspace = workspace
 
-    def _insert(self, node):
+    def _insert(self, cell):
         assert self is not None
-        assert node.document is None
-        node.document = self
-        if node.ident == "" or node.ident in self.nodes:
+        assert cell.document is None
+        cell.document = self
+        if cell.ident == "" or cell.ident in self.cells:
             ident = chr(randint(1, 255))
-            while ident in self.nodes:
+            while ident in self.cells:
                 ident += chr(randint(0, 255))
-            node.ident = ident
-        self.nodes[node.ident] = node
-        if isinstance(node, ListCell):
-            for subnode in node:
-                self._insert(subnode)
-        return node
+            cell.ident = ident
+        self.cells[cell.ident] = cell
+        if isinstance(cell, ListCell):
+            for subcell in cell:
+                self._insert(subcell)
+        return cell
 
-    def _remove(self, node):
-        assert node.document is self
-        node.document = None
-        del self.nodes[node.ident]
-        if isinstance(node, ListCell):
-            for subnode in node:
-                self._remove(subnode)
+    def _remove(self, cell):
+        assert cell.document is self
+        cell.document = None
+        del self.cells[cell.ident]
+        if isinstance(cell, ListCell):
+            for subcell in cell:
+                self._remove(subcell)
 
 class Cell(object):
     document = None
@@ -82,6 +82,38 @@ class Cell(object):
     def is_rightmost(self):
         return self.parent and self.parent.index(self) == len(self.parent) - 1
 
+    @property
+    def top(self):
+        while not self.is_external():
+            self = self[0]
+        return self
+
+    @classmethod
+    def bottom(self):
+        while not self.is_external():
+            self = self[len(self) - 1]
+        return self
+
+    @property
+    def previous_external(self):
+        parent = self.parent
+        if parent:
+            index = parent.index(self)
+            if index > 0:
+                return parent[index-1].bottom
+            else:
+                return parent.previous_external
+
+    @property
+    def next_external(self):
+        parent = self.parent
+        if parent:
+            index = parent.index(self)
+            if index + 1 < len(parent):
+                return parent[index+1].top
+            else:
+                return parent.next_external
+
 class TextCell(Cell):
     def __init__(self, contents, ident='', symbol=True):
         self.contents = unicode(contents)
@@ -131,11 +163,11 @@ class ListCell(Cell):
         self.ident = ident
         self.label = label
         self.contents = []
-        for node in contents:
-            assert isinstance(node, Cell)
-            assert node.parent is None
-            node.parent = self
-            self.contents.append(node)
+        for cell in contents:
+            assert isinstance(cell, Cell)
+            assert cell.parent is None
+            cell.parent = self
+            self.contents.append(cell)
 
     def __getitem__(self, index):
         return self.contents[index]
@@ -155,10 +187,10 @@ class ListCell(Cell):
         contents = self.contents[start:stop]
         self.contents = self.contents[:start] + self.contents[stop:]
         if isinstance(contents, list):
-            for node in contents:
-                assert node.parent is self
-                node.parent = None
-                node.document._remove(node)
+            for cell in contents:
+                assert cell.parent is self
+                cell.parent = None
+                cell.document._remove(cell)
         return contents
 
     def index(self, obj):
@@ -173,29 +205,29 @@ class ListCell(Cell):
     def put(self, index, contents):
         index = max(0, min(len(self), index))
         self.contents = self.contents[:index] + contents + self.contents[index:]
-        for node in contents:
-            assert isinstance(node, Node)
-            assert node.parent is None
-            node.parent = self
-            self.document._insert(node)
+        for cell in contents:
+            assert isinstance(cell, Cell)
+            assert cell.parent is None
+            cell.parent = self
+            self.document._insert(cell)
 
     def yank(self, start, stop):
         start = max(0, min(len(self), start))
         stop = max(0, min(len(self), stop))
         contents = self.contents[start:stop]
-        contents = [node.copy() for node in contents]
+        contents = [c.copy() for c in contents]
         return contents
 
 
-def transform_enc(node):
+def transform_enc(cell):
     print "warning: document format will change if the new document model turns out to be sufficient."
-    assert isinstance(node, Cell), "{} not a cell".format(node)
-    if node.symbol:
-        return (node.contents, None, node.ident)
-    elif isinstance(node, TextCell):
-        return ("", node.contents, node.ident)
+    assert isinstance(cell, Cell), "{} not a cell".format(cell)
+    if cell.symbol:
+        return (cell.contents, None, cell.ident)
+    elif isinstance(cell, TextCell):
+        return ("", cell.contents, cell.ident)
     else:
-        return (node.label, node.contents, node.ident)
+        return (cell.label, cell.contents, cell.ident)
 
 def transform_dec(label, contents, ident):
     if contents is None:

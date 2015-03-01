@@ -151,6 +151,11 @@ def main(respond):
                 visual.scroll_x += event.wheel.x * 10.0
                 visual.scroll_y += event.wheel.y * 10.0
             else:
+                if event.type == SDL_KEYDOWN:
+                    if event.key.keysym.sym == SDLK_PAUSE:
+                        reload(actions)
+                        print "actions table reloaded"
+
                 keyboard.push_event(event)
         actions.interpret(visual, keyboard)
         paint(time.time())

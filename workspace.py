@@ -7,8 +7,8 @@ class Workspace(object):
     def __init__(self):
         self.documents = {}
         self.grammars = {}
+        self.clipboard = None
 #        self.unbound = []
-#        self.copybuf = None
 #        self.schema_cache = {}
 #
 #    def new(self):
@@ -30,7 +30,7 @@ class Workspace(object):
             document = dom.Document(dom.ListCell("", dom.load(path)), self)
             self.documents[path] = document
             return document
-        elif not os.path.isdir(os.path.dirname(path)):
+        elif not os.path.isdir(os.path.dirname(path)) and os.path.dirname(path) <> "":
             raise Exception("Not a directory: {}".format(os.path.dirname(path)))
         elif create:
             document = dom.Document(dom.ListCell("", []), self)
@@ -53,5 +53,5 @@ class Workspace(object):
             cell = cell.parent
             if modeblock.validate(cell):
                 return self.get_grammar(cell[0][0][:])
-        if modeline.validate(cell[0]):
+        if len(cell) > 0 and modeline.validate(cell[0]):
             return self.get_grammar(cell[0][0][:])
