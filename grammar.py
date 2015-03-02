@@ -2,9 +2,10 @@ from dom import TextCell, ListCell
 
 class Grammar(object):
     def __init__(self, toplevel, rules, contexes):
+        self.contexes = contexes
         self.toplevel = toplevel
         self.rules = rules
-        self.contexes = contexes
+        self.root = Star(toplevel)
         for label, rule in rules.iteritems():
             rule.label = label
         for name, context in contexes.iteritems():
@@ -20,33 +21,26 @@ class Grammar(object):
             return modeline
         if modeblock.validate(cell):
             return modeblock
-        if turnip.validate(cell):
+        if turnip.validate(cell) or cell.label == '@':
             return turnip
         if len(cell.label) > 0 and cell.label in self.rules:
             rule = self.rules[cell.label]
             if rule.validate(cell):
                 return rule
-#        if cell.parent is not None:
-#            rule = self.recognize(cell.parent)
-#            if isinstance(rule, ListRule):
-#                rule = rule.at(cell.parent.index(cell))
-#                if isinstance(rule, ListRule):
-#                    if rule.validate(cell):
-#                        return rule
+        if cell.parent is None:
+            return self.root
+        rule = self.recognize(cell.parent)
+        if isinstance(rule, ListRule):
+            rule = rule.at(cell.parent.index(cell))
+            if not isinstance(rule, Context):
+                return rule
 
     def recognize_context(self, cell):
-        rule = self.recognize_in_context(cell)
-        if isinstance(rule, Context):
-            return rule
-        
-    def recognize_in_context(self, cell):
-        if node.parent is None:
-            return Star(self.toplevel)
         rule = self.recognize(cell.parent)
-        if rule is None:
-            rule = self.recognize_in_context(cell.parent)
         if isinstance(rule, ListRule):
-            return rule.at(cell.parent.index(cell))
+            rule = rule.at(cell.parent.index(cell))
+            if isinstance(rule, Context):
+                return rule
 
 class Rule(object):
     pass

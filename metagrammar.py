@@ -32,6 +32,7 @@ def new_metagrammar():
         'toplevel': group(stmt, [symbol]),
         }, contexes)
 
+blank = Grammar(anything, {}, {})
 grammar = new_metagrammar()
 
 def load(forest):

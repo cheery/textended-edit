@@ -47,6 +47,7 @@ class Workspace(object):
             if path not in self.grammars:
                 self.grammars[path] = metagrammar.load(dom.load(path))
             return self.grammars[path]
+        return metagrammar.blank
 
     def grammar_of(self, cell):
         while cell.parent is not None:
@@ -55,3 +56,4 @@ class Workspace(object):
                 return self.get_grammar(cell[0][0][:])
         if len(cell) > 0 and modeline.validate(cell[0]):
             return self.get_grammar(cell[0][0][:])
+        return metagrammar.blank

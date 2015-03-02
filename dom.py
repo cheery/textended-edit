@@ -49,14 +49,16 @@ class Cell(object):
 
     @property
     def hierarchy(self):
+        this = self
         result = []
-        while self is not None:
-            result.append(self)
-            self = self.parent
+        while this is not None:
+            result.append(this)
+            this = this.parent
         return result
 
     def order(self, other):
         assert self is not other
+        assert self.document is other.document
         h0 = self.hierarchy
         h1 = other.hierarchy
         assert h0[-1] is h1[-1], "cells in different documents"
@@ -88,7 +90,7 @@ class Cell(object):
             self = self[0]
         return self
 
-    @classmethod
+    @property
     def bottom(self):
         while not self.is_external():
             self = self[len(self) - 1]
@@ -180,6 +182,13 @@ class ListCell(Cell):
 
     def copy(self):
         return self.__class__(self.label, self.yank(0, len(self)), self.ident)
+
+    def dissolve(self):
+        assert self.document is None and self.parent is None
+        for cell in self.contents:
+            assert cell.parent is self
+            cell.parent = None
+        return self.contents
 
     def drop(self, start, stop, undo=False):
         start = max(0, min(len(self), start))

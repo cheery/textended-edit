@@ -14,8 +14,8 @@ def page(document, options):
 
 def layout_cell(cell, options):
     if isinstance(cell, TextCell):
-        if cell.is_blank():
-            return hpack(plain("_", options, 'color_empty'))
+        if cell.is_blank() and cell.symbol:
+            return hpack(plain("_", options, 'color_empty')).set_subj(cell, 0)
         if cell.symbol:
             return hpack(plain(cell, options))
         pre = plain('"', options, 'color_string')

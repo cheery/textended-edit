@@ -32,13 +32,8 @@ class Position(object):
 
     @property
     def on_left_boundary(self):
-        if self.cell.parent is None:
-            return False
-        parent = self.cell.parent
-        return parent.index(self.cell) == 0
+        return self.index == 0
 
     @property
     def on_right_boundary(self):
-        if self.cell.parent is None:
-            return False
-        return parent.index(self.cell) == len(parent)
+        return self.index == len(self.cell)

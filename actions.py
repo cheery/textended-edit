@@ -1,5 +1,5 @@
-from dom import TextCell, ListCell
-from grammar import modeline
+from dom import Cell, TextCell, ListCell
+from grammar import modeline, Star, Plus
 from position import Position
 import sys
 import traceback
@@ -18,12 +18,23 @@ def interpret(visual, keyboard):
                     blank = modeline.blank()
                     body.put(0, [blank])
                     visual.setpos(Position.bottom(blank))
-            elif key == '\xc2':
+            elif key == 'f4':
+                for cell in visual.head.cell.hierarchy:
+                    print cell,
+                print
+                for cell in visual.head.cell.hierarchy:
+                    print cell.rule,
+                print
+                for cell in visual.head.cell.hierarchy:
+                    print cell.grammar,
+                print
+            elif key == unichr(167):
                 start_completion(visual)
             elif key == 'tab':
-                start_composition(visual)
-            elif key == 'left alt':
-                start_expansion(visual)
+                if 'shift' in mod:
+                    start_expansion(visual)
+                else:
+                    start_composition(visual)
             elif key == 'x' and 'ctrl' in mod:
                 position, clipboard = collapse(visual.head, visual.tail)
                 visual.setpos(position)
@@ -47,29 +58,29 @@ def interpret(visual, keyboard):
                         visual.setpos(collapse(visual.head, visual.tail+1)[0])
                 else:
                     visual.setpos(collapse(visual.head, visual.tail)[0])
+            elif key == 'return':
+                position, clipboard = collapse(visual.head, visual.tail)
+                if 'shift' in mod:
+                    visual.setpos(fall_left(position))
+                else:
+                    visual.setpos(fall_right(position))
             elif text == ' ':
                 position, clipboard = collapse(visual.head, visual.tail)
                 visual.setpos(position)
-                if not isinstance(cliboard, list):
+                if not isinstance(clipboard, list):
                     if 'shift' in mod:
                         visual.setpos(split_left(visual.head))
                     else:
                         visual.setpos(split_right(visual.head))
             elif text == '"':
-                raise Exception("not implemented")
-# def insert_string(visual):
-#     assert visual.head.subj.isblank()
-#     string = dom.Literal(u"", u"")
-#     visual.head.replace([string])
-#     visual.setpos(Position(string, 0))
+                position, clipboard = collapse(visual.head, visual.tail)
+                string = TextCell(u"", symbol=False)
+                visual.setpos(put(position, [string])[1])
             elif text is not None:
                 position, clipboard = collapse(visual.head, visual.tail)
                 visual.setpos(put(position, text)[1])
             else:
                 print key, mod, text
-            # cell.context
-            # cell.grammar
-            # cell.rule
         except Exception:
             traceback.print_exc()
 
@@ -149,39 +160,93 @@ def start_expansion(visual):
     visual.setpos(Position(forest[0], visual.head.index))
 
 def collapse(head, tail):
-    raise Exception("not implemented")
-#     subj, left, right = head.cell.order(tail.cell)
-#     g0 = fault_line(subj, left, cell.is_leftmost)
-#     g1 = fault_line(subj, right, cell.is_rightmost)
-#     i0 = g0.pop(0)
-#     i1 = g1.pop(0)
-#     while len(g0) == 0 and len(g1) == 0 and i0 == 0 and i1 == len(subj)-1 and subj.parent and len(subj.label) > 0:
-#         i0 = i1 = subj.parent.index(subj)
-#         subj = subj.parent
-#     placeholder, dropped = crunch(visual, subj, i0, i1+1)
-#     if len(dropped) == 1:
-#         prefix = []
-#         postfix = []
-#     else:
-#         leftbound = dropped.pop(0)
-#         rightbound = dropped.pop(-1)
-#         prefix = []
-#         for i in g0:
-#             sequence = dissolve(leftbound)
-#             leftbound = sequence[i]
-#             prefix = prefix + sequence[:i]
-#             dropped = sequence[i+1:] + dropped
-#         postfix = []
-#         for i in g1:
-#             sequence = dissolve(rightbound)
-#             rightbound = sequence[i]
-#             dropped = dropped + sequence[:i]
-#             postfix = sequence[i+1:] + postfix
-#     new_symbol = dom.Symbol(u"")
-#     # to fix: use constraint-aware put here instead.
-#     put(visual, placeholder, cleanup(prefix) + [new_symbol] + cleanup(postfix))
-#     # to fix: if subj is no longer recognized, turn it to '@'
-#     return Position(new_symbol, 0), cleanup(dropped)
+    if head.cell is tail.cell:
+        start = min(head.index, tail.index)
+        stop = max(head.index, tail.index)
+        return head, head.cell.drop(start, stop)
+    common, left, right = head.cell.order(tail.cell)
+    g0 = fault_line(common, left, Cell.is_leftmost)
+    g1 = fault_line(common, right, Cell.is_rightmost)
+    i0 = g0.pop(0)
+    i1 = g1.pop(0)
+    while len(g0) == len(g1) == 0 and i0 == 0 and i1 == len(common)-1 and common.parent and len(common.label) > 0:
+        i0 = i1 = common.parent.index(common)
+        common = common.parent
+    position, dropped = collapse_range(common, i0, i1+1)
+    if len(dropped) == 1:
+        return position, dropped
+    else:
+        leftbound = dropped.pop(0)
+        rightbound = dropped.pop(-1)
+        prefix = []
+        for i in g0:
+            sequence = leftbound.dissolve()
+            prefix = prefix + sequence[:i]
+            leftbound = sequence[i]
+            dropped = sequence[i+1:] + dropped
+        dropped = [leftbound] + dropped
+        postfix = []
+        for i in g1:
+            sequence = rightbound.dissolve()
+            dropped = dropped + sequence[:i]
+            rightbound = sequence[i]
+            postfix = sequence[i+1:] + postfix
+        dropped = dropped + [rightbound]
+        new_position = Position(TextCell(u""), 0)
+        put(position, trim(prefix + [new_position.cell] + postfix, []))
+        return new_position, dropped
+
+def collapse_range(cell, start, stop):
+    rule = cell.rule
+    dropped = cell.drop(start, stop)
+    placeholder = Position(TextCell(u""), 0)
+    cell.put(start, [placeholder.cell])
+    if rule and not rule.validate(cell):
+        cell = carve_turnip(cell)
+        placeholder = Position(cell[start], 0)
+    return placeholder, dropped
+
+def fault_line(target, cell, cond):
+    result = []
+    while cond(cell) and cell.parent != target:
+        cell = cell.parent
+    while cell != target:
+        result.append(cell.parent.index(cell))
+        cell = cell.parent
+    result.reverse()
+    return result
+
+def fall_left(position):
+    data = position.cell.drop(0, position.index)
+    cell = position.cell
+    position = position.above
+    while True:
+        if cell.is_blank() and can_carve(position.cell) and position.above:
+            position.cell.drop(position.index, position.index+1)
+        elif can_insert(position.cell):
+            return put(insert_blank(position), data)[1]
+        elif not position.on_left_boundary:
+            pos = climb_left(position.cell[position.index-1], None)
+            if pos:
+                return put(insert_blank(pos), data)[1]
+        cell = position.cell
+        position = position.above
+
+def fall_right(position):
+    data = position.cell.drop(position.index, len(position.cell))
+    cell = position.cell
+    position = position.above+1
+    while True:
+        if cell.is_blank() and can_carve(position.cell) and position.above:
+            position.cell.drop(position.index-1, position.index)
+        elif can_insert(position.cell):
+            return put(insert_blank(position), data)[0]
+        elif not position.on_right_boundary:
+            pos = climb_right(position.cell[position.index], None)
+            if pos:
+                return put(insert_blank(pos), data)[0]
+        cell = position.cell
+        position = position.above+1
 
 def join_left(position):
     lhs = Position.bottom(position.cell.previous_external)
@@ -193,36 +258,103 @@ def join_right(position):
     lhs = carve(position)
     return put(rhs, lhs[:])[1]
 
+def carve(position):
+    above = position.above
+    if can_carve(above.cell):
+        cell = above.cell.drop(above.index, above.index+1)[0]
+        return cell
+    else:
+        cell = above.cell.drop(above.index, above.index+1)[0]
+        carve_turnip(above.cell)
+        return cell
+
+def can_carve(cell):
+    rule = cell.rule
+    if isinstance(rule, Star):
+        return True
+    if isinstance(rule, Plus) and len(cell) > 1:
+        return True
+    if cell.parent is None:
+        return True
+
+def carve_turnip(cell):
+    parent = cell.parent
+    index = parent.index(cell)
+    cell = parent.drop(index, index+1)[0]
+    new_cell = ListCell(u"@", trim(cell.dissolve(), []))
+    parent.put(index, [new_cell])
+    return new_cell
+
+def trim(forest, result):
+    for cell in forest:
+        if isinstance(cell, ListCell) and len(cell.label) == 0:
+            trim(cell.dissolve(), result)
+        else:
+            result.append(cell)
+    return result
+
 def split_left(position):
-    raise Exception("not implemented")
+    data = position.cell.drop(0, position.index)
+    position = position.above
+    while True:
+        if can_insert(position.cell):
+            return put(insert_blank(position), data)[1]
+        elif not position.on_left_boundary:
+            position = climb_left(position.cell[position.index-1], position)
+            return put(insert_blank(position), data)[1]
+        else:
+            position = position.above
 
 def split_right(position):
-    raise Exception("not implemented")
-# def split_right(visual, position):
-#     new_symbol = dom.Symbol(position.subj.drop(position.index, len(position.subj)))
-#     above = position.above
-#     while True:
-#         if accepts_blank(visual, above.subj):
-#             put(visual, insert_blank(visual, above+1), [new_symbol])
-#             return Position(new_symbol, 0)
-#         elif above.index == len(above.subj) - 1:
-#             above = above.above
-#             continue
-#         if split_right_climb(visual, above.subj[above.index+1], new_symbol) is None:
-#             put(visual, insert_blank(visual, above+1), [new_symbol])
-#         return Position(new_symbol, 0)
-# 
-# def split_right_climb(visual, subj, new_symbol):
-#     if subj.islist():
-#         if accepts_blank(visual, subj):
-#             blank = insert_blank(visual, Position(subj, 0))
-#             return put(visual, blank, [new_symbol])
-#         elif len(subj) > 0:
-#             return split_right_climb(subj[0])
+    data = position.cell.drop(position.index, len(position.cell))
+    position = position.above+1
+    while True:
+        if can_insert(position.cell):
+            return put(insert_blank(position), data)[0]
+        elif not position.on_right_boundary:
+            position = climb_right(position.cell[position.index], position)
+            return put(insert_blank(position), data)[0]
+        else:
+            position = position.above+1
+
+def climb_left(cell, otherwise):
+    if can_insert(cell):
+        return Position(cell, len(cell))
+    elif not cell.is_external():
+        return climb_right(cell[len(cell)-1], otherwise)
+    else:
+        return otherwise
+
+def climb_right(cell, otherwise):
+    if can_insert(cell):
+        return Position(cell, 0)
+    elif not cell.is_external():
+        return climb_right(cell[0], otherwise)
+    else:
+        return otherwise
+
+def can_insert(cell):
+    rule = cell.rule
+    if isinstance(rule, (Star, Plus)):
+        return True
+    if cell.parent is None:
+        return True
+
+def insert_blank(position):
+    blank = TextCell(u"")
+    if can_insert(position.cell):
+        position.cell.put(position.index, [blank])
+    else:
+        cell = carve_turnip(position.cell)
+        cell.put(position.index, [blank])
+    return Position.top(blank)
 
 def put(position, data):
-    if isinstance(position.cell, ListCell) and isinstance(data, list):
-        return putforest(position, data)
+    if isinstance(data, list):
+        if len(data) == 1:
+            return putcell(position, data[0])
+        else:
+            return putforest(position, data)
     elif isinstance(position.cell, TextCell):
         return puttext(position, data)
     elif position.cell.is_external():
@@ -232,21 +364,45 @@ def put(position, data):
     else:
         raise Exception("bad put")
 
-def putforest(position, data):
-    raise Exception("not implemented")
-
-def puttext(position, data):
+def putcell(position, cell):
     if position.cell.is_blank():
         context = position.cell.context
-        cell = TextCell(data)
-        if context is not None and not context.match(cell):
-            replace(position.cell, ListCell(u"@", [cell]))
+        if context:
+            if context.match(cell):
+                replace(position.cell, cell)
+            else:
+                replace(position.cell, ListCell(u"@", [cell]))
+            return Position.top(cell), Position.bottom(cell)
         else:
             replace(position.cell, cell)
-        return Position.top(cell), Position.bottom(cell)
+            return Position.top(cell), Position.bottom(cell)
     else:
-        position.cell.put(position.index, data)
-        return position, position + len(data)
+        raise Exception("not implemented")
+
+def putforest(position, data):
+    if position.cell.is_blank():
+        parent = position.cell.parent
+        index = parent.index(position.cell)
+        context = position.cell.context
+        if context and can_insert(parent):
+            if all(context.match(cell) for cell in data):
+                parent.drop(index, index+1)
+                parent.put(index, data)
+                return Position.top(data[0]), Position.bottom(data[-1])
+        replace(position.cell, ListCell(u"@", data))
+        return Position.top(data[0]), Position.bottom(data[-1])
+    else:
+        raise Exception("not implemented")
+
+def puttext(position, data):
+    position.cell.put(position.index, data)
+    return position, position + len(data)
+
+def remove(cell):
+    parent = cell.parent
+    index = parent.index(cell)
+    drop = parent.drop(index, index+1)
+    return drop
 
 def replace(cell, newcell):
     parent = cell.parent
@@ -254,197 +410,3 @@ def replace(cell, newcell):
     drop = parent.drop(index, index+1)
     parent.put(index, [newcell])
     return drop
-
-# def space(visual):
-#     assert visual.head == visual.tail
-#     visual.setpos(split_right(visual, visual.head))
-# 
-# #    subj = visual.head.subj
-# #    index = visual.head.index
-# #    above = visual.head.above
-# #    rule = visual.workspace.active_schema(above.subj).recognize_in_context(above.subj)
-# #    if isinstance(rule, (Star, Plus)) and isinstance(rule.rule, (Symbol, Context)) or above.subj.label == '@':
-# #        if subj.isblank() and subj.parent.parent is not None:
-# #            spaceWalk(visual, subj.parent)
-# #            Position(subj, 0).remove()
-# #        else:
-# #            new_symbol = dom.Symbol(subj.drop(index, len(subj)))
-# #            (above+1).put([new_symbol])
-# #            visual.setpos(Position.top(new_symbol))
-# #    else:
-# #        spaceWalk(visual, subj)
-# 
-# 
-# #def spaceWalk(visual, subj):
-# #    above = Position(subj, 0).above
-# #    rule = visual.workspace.active_schema(above.subj).recognize_in_context(above.subj)
-# #    if isinstance(rule, Sequence):
-# #        if above.index+1 < len(above.subj):
-# #            visual.setpos(Position.top(above.subj[above.index+1]))
-# #            return
-# #        else:
-# #            return spaceWalk(visual, above.subj)
-# #    if isinstance(rule, (Star, Plus)) and isinstance(rule.rule, (Symbol, Context)):
-# #        new_symbol = dom.Symbol(u"")
-# #        (above+1).put([new_symbol])
-# #        visual.setpos(Position.top(new_symbol))
-# #        return
-# #    print visual.head.subj
-# #    print visual.head.above.subj
-# #    raise Exception("not implemented correctly")
-# 
-# 
-# def put(visual, position, data):
-#     if isinstance(data, list):
-#         assert len(data) > 0
-#         if not accepts(visual, position, data):
-#             return put(visual, position, [dom.Literal(u"@", data)])
-#         position.replace(data)
-#         return Position.bottom(data[-1])
-#     elif position.subj.islist():
-#         new_symbol = dom.Symbol(unicode(data))
-#         position.put([new_symbol])
-#         return Position(new_symbol, len(data))
-#     else:
-#         position.put(data)
-#         return position + len(data)
-#     
-# def cleanup(forest):
-#     result = []
-#     for tree in forest:
-#         if tree.islist() and len(tree.label) == 0:
-#             result.extend(cleanup(dissolve(tree)))
-#         else:
-#             result.append(tree)
-#     return result
-# 
-# def dissolve(node):
-#     assert node.parent == None
-#     contents = node.contents
-#     for node in contents:
-#         node.parent = None
-#     return contents
-# 
-# def fault_line(target, node, cond):
-#     result = []
-#     while cond(node) and node.parent != target:
-#         node = node.parent
-#     while node != target:
-#         result.append(node.parent.index(node))
-#         node = node.parent
-#     result.reverse()
-#     return result
-# 
-# def accepts(visual, position, data):
-#     if isinstance(data, list) and len(data) == 1:
-#         return accepts_item(visual, position, data[0])
-#     if isinstance(data, list):
-#         return accepts_list(visual, position, data)
-#     rule = visual.workspace.active_schema(position.subj).recognize_in_context(position.subj)
-#     if isinstance(rule, Context):
-#         return any(isinstance(term, Symbol) for term in rule.valid_terms)
-#     return isinstance(rule, Symbol)
-# 
-# def accepts_item(visual, position, node):
-#     rule = visual.workspace.active_schema(position.subj).recognize_in_context(position.subj)
-#     return check_item(visual, position, rule, node)
-# 
-# def accepts_list(visual, position, seq):
-#     above = position.above
-#     rule = visual.workspace.active_schema(above.subj).recognize_in_context(above.subj)
-#     if isinstance(rule, (Plus, Star)):
-#         return all(check_item(visual, position, rule.rule, node) for node in seq)
-# 
-# def check_item(visual, position, rule, node):
-#     if node.islist() and node.label == '@':
-#         return True
-#     result = visual.workspace.active_schema(position.subj).recognize(node)
-#     if isinstance(rule, Context):
-#         return True
-#         #return len(rule.match(result)) > 0
-#     elif isinstance(rule, Rule):
-#         return rule.validate(node)
-#     else:
-#         return True
-# 
-# def insert_blank(visual, position):
-#     blank = dom.Symbol(u"")
-#     if accepts_blank(visual, position.subj):
-#         position.put([blank])
-#     else:
-#         trump(position, [blank])
-#     return Position(blank, 0)
-# 
-# def trump(position, seq):
-#     base = position.above
-#     base.subj.drop(base.index, base.index+1)
-#     forest = dissolve(position.subj)
-#     forest[position.index:position.index] = seq
-#     subj = dom.Literal(u"@", cleanup(forest))
-#     if len(subj) > 0:
-#         base.put([subj])
-# 
-# def accepts_blank(visual, subj):
-#     if subj.label == '@':
-#         return True
-#     rule = visual.workspace.active_schema(subj).recognize_in_context(subj)
-#     return isinstance(rule, (Star, Plus))
-# 
-# def crunch(visual, subj, start, stop):
-#     rule = visual.workspace.active_schema(subj).recognize_in_context(subj)
-#     dropped = subj.drop(start, stop)
-#     placeholder = Position(dom.Symbol(u""), 0)
-#     if isinstance(rule, (Star, Plus)) or start + 1 == stop:
-#         subj.put(start, [placeholder.subj])
-#     else:
-#         trump(Position(subj, start), [placeholder.subj])
-#     return placeholder, dropped
-# 
-# def carve(visual, position):
-#     above = position.above
-#     rule = visual.workspace.active_schema(above.subj).recognize_in_context(above.subj)
-#     if isinstance(rule, Star):
-#         position.replace([])
-#     elif (isinstance(rule, Plus) or above.subj.label == '@') and len(above.subj) > 1:
-#         position.replace([])
-#     else:
-#         position.replace([])
-#         trump(above, [])
-# 
-# #    assert visual.head == visual.tail
-# #    subj = visual.head.subj
-# #    index = visual.head.index
-# #    above = visual.head.above
-# #    if index > 0:
-# #        visual.head.subj.drop(visual.head.index-1, visual.head.index)
-# #        visual.setpos(visual.head-1)
-# #        return
-# #    rule = visual.workspace.active_schema(above.subj).recognize_in_context(above.subj)
-# #    if isinstance(rule, (Star, Plus)) and isinstance(rule.rule, (Symbol, Context)) or above.subj.label == '@':
-# #        if above.index > 0:
-# #            prev = Position.bottom(above.subj[above.index - 1])
-# #            if not prev.subj.islist():
-# #                prev.put(subj[:])
-# #                visual.head.remove()
-# #            elif visual.head.subj.isblank():
-# #                visual.head.remove()
-# #            visual.setpos(prev)
-# #        elif isinstance(rule, Star):
-# #            visual.head.remove()
-# #            visual.setpos(above)
-# #        else:
-# #            leftDeleteWalk(visual, subj.parent)
-# #    else:
-# #        leftDeleteWalk(visual, subj)
-# #
-# #def leftDeleteWalk(visual, subj):
-# #    if subj.is_empty() and (not subj.issymbol()) and len(subj.label) > 0:
-# #        new_symbol = dom.Symbol(u"")
-# #        Position(subj, 0).replace([new_symbol])
-# #        return visual.setpos(Position(new_symbol, 0))
-# #    index = subj.parent.index(subj)
-# #    if index == 0:
-# #        return leftDeleteWalk(visual, subj.parent)
-# #    else:
-# #        return visual.setpos(Position.bottom(subj.parent[index-1]))
-# 
