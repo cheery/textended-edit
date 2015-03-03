@@ -6,6 +6,8 @@ class Document(object):
         self.cells = {}
         self.body = self._insert(body)
         self.workspace = workspace
+        self.unstaged = []
+        self.undos = []
 
     def _insert(self, cell):
         assert self is not None
@@ -29,6 +31,29 @@ class Document(object):
         if isinstance(cell, ListCell):
             for subcell in cell:
                 self._remove(subcell)
+
+    def commit(self, head, tail):
+        if len(self.unstaged) == 0:
+            return
+        self.undos.append((head, tail, self.unstaged))
+        self.unstaged = []
+
+    def rollback(self):
+        if len(self.unstaged) == 0:
+            return []
+        reverted = reversed(self.unstaged) 
+        self.unstaged = []
+        for action in reverted:
+            getattr(action[0], action[1])(*action[2:])
+        inverse = self.unstaged
+        self.unstaged = []
+        return inverse
+
+    def undo(self):
+        self.rollback()
+        head, tail, self.unstaged = self.undos.pop(-1)
+        self.rollback()
+        return head, tail
 
 class Cell(object):
     document = None
@@ -135,13 +160,14 @@ class TextCell(Cell):
             return "<TextCell {!r}>".format(self.contents)
 
     def copy(self):
-        return self.__class__(self.contents, self.mode, self.ident)
+        return self.__class__(self.contents, self.ident, self.symbol)
 
     def drop(self, start, stop):
         start = max(0, min(len(self), start))
         stop = max(0, min(len(self), stop))
         contents = self.contents[start:stop]
         self.contents = self.contents[:start] + self.contents[stop:]
+        self.document.unstaged.append((self, 'put', start, contents))
         return contents
 
     def is_blank(self):
@@ -154,6 +180,7 @@ class TextCell(Cell):
         assert isinstance(contents, (str, unicode))
         index = max(0, min(len(self), index))
         self.contents = self.contents[:index] + contents + self.contents[index:]
+        self.document.unstaged.append((self, 'drop', index, index+len(contents)))
 
     def yank(self, start, stop):
         start = max(0, min(len(self), start))
@@ -200,6 +227,7 @@ class ListCell(Cell):
                 assert cell.parent is self
                 cell.parent = None
                 cell.document._remove(cell)
+        self.document.unstaged.append((self, 'put', start, contents))
         return contents
 
     def index(self, obj):
@@ -219,6 +247,7 @@ class ListCell(Cell):
             assert cell.parent is None
             cell.parent = self
             self.document._insert(cell)
+        self.document.unstaged.append((self, 'drop', index, index+len(contents)))
 
     def yank(self, start, stop):
         start = max(0, min(len(self), start))
@@ -227,9 +256,33 @@ class ListCell(Cell):
         contents = [c.copy() for c in contents]
         return contents
 
+    def unwrap(self):
+        parent = self.parent
+        index = parent.index(self)
+        length = len(self.contents)
+        parent.contents[index:index+1] = self.contents
+        for cell in self.contents:
+            assert cell.parent is self
+            cell.parent = parent
+        self.contents = []
+        self.parent = None
+        self.document.unstaged.append((parent, 'wrap', index, index+length, self))
+        self.document._remove(self)
+        return index, index+length, self
+
+    def wrap(self, start, stop, cell):
+        assert len(cell.contents) == 0 and cell.parent is None
+        cell.parent = self
+        cell.document._insert(cell)
+        cell.contents = self.contents[start:stop]
+        self.contents[start:stop] = [cell]
+        for subcell in cell.contents:
+            assert subcell.parent is self
+            subcell.parent = cell
+        self.document.unstaged.append((cell, 'unwrap'))
 
 def transform_enc(cell):
-    print "warning: document format will change if the new document model turns out to be sufficient."
+    "warning: document format will change if the new document model turns out to be sufficient."
     assert isinstance(cell, Cell), "{} not a cell".format(cell)
     if cell.symbol:
         return (cell.contents, None, cell.ident)

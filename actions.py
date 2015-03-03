@@ -6,8 +6,8 @@ import traceback
 
 def interpret(visual, keyboard):
     for key, mod, text in keyboard:
+        head, tail = visual.head, visual.tail
         try:
-            print key, mod, text
             if key == 'escape':
                 sys.exit(0)
             elif key == 'f2':
@@ -42,6 +42,24 @@ def interpret(visual, keyboard):
             elif key == 'v' and 'ctrl' in mod:
                 position, clipboard = collapse(visual.head, visual.tail)
                 visual.setpos(put(position, clipboard)[1])
+            elif key == 'z' and 'ctrl' in mod:
+                visual.head, visual.tail = visual.document.undo()
+            elif key == 'left':
+                head = visual.head
+                if head.on_left_boundary:
+                    head = Position.bottom(head.cell.previous_external) 
+                else:
+                    head -= 1
+                tail = visual.tail if 'shift' in mod else head 
+                visual.setpos(head, tail)
+            elif key == 'right':
+                head = visual.head
+                if head.on_right_boundary:
+                    head = Position.top(head.cell.next_external) 
+                else:
+                    head += 1
+                tail = visual.tail if 'shift' in mod else head 
+                visual.setpos(head, tail)
             elif key == 'backspace':
                 if visual.head == visual.tail:
                     if visual.head.on_left_boundary:
@@ -82,10 +100,26 @@ def interpret(visual, keyboard):
             else:
                 print key, mod, text
         except Exception:
+            print "Error during pressing:", key, mod, text
             traceback.print_exc()
+            visual.document.rollback()
+            visual.head = head
+            visual.tail = tail
+        else:
+            visual.document.commit(head, tail)
 
 def start_completion(visual):
-    raise Exception("not implemented")
+    head = visual.head
+    assert head.cell.symbol
+    result = []
+    query = head.cell[:]
+    for rule in head.cell.grammar.rules.values():
+        if rule.label.startswith(query):
+            result.append(rule)
+    result.sort(key=lambda rule: rule.label)
+    block = result[0].blank()
+    replace(head.cell, block)
+    visual.setpos(Position.top(block))
 # def completion(visual):
 #     workspace = visual.workspace
 #     head = visual.head
@@ -118,8 +152,21 @@ def start_completion(visual):
 #         raise Exception("not implemented")
 
 
+import parsing
+reload(parsing)
 def start_composition(visual):
-    raise Exception("not implemented")
+    cell = visual.head.cell
+    while cell.label != '@':
+        cell = cell.parent
+        if cell is None:
+            raise Exception("not implemented")
+    context = cell.context
+    assert context
+    result = iter(parsing.parse(cell.copy(), context.rules)).next()
+    new_block = result.wrap()
+    replace(cell, new_block)
+    visual.setpos(Position.bottom(new_block))
+
 # def composition(visual):
 #     if visual.chain[0] == 'composition':
 #         _, block, result, repeat = visual.chain
