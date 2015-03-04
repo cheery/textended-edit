@@ -57,3 +57,9 @@ class Workspace(object):
         if len(cell) > 0 and modeline.validate(cell[0]):
             return self.get_grammar(cell[0][0][:])
         return metagrammar.blank
+
+    def write(self, document):
+        for path, item in self.documents.items():
+            if item is document:
+                return dom.save(path, document.body)
+        raise Exception("Document doesn't have a filename.")

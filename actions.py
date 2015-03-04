@@ -29,12 +29,15 @@ def interpret(visual, keyboard):
                     print cell.grammar,
                 print
             elif key == unichr(167):
-                start_completion(visual)
+                do_action(visual, start_completion)
             elif key == 'tab':
                 if 'shift' in mod:
                     start_expansion(visual)
+                    #do_action(visual, start_expansion)
                 else:
-                    start_composition(visual)
+                    do_action(visual, start_composition)
+            elif key == 's' and 'ctrl' in mod:
+                visual.document.workspace.write(visual.document)
             elif key == 'x' and 'ctrl' in mod:
                 position, clipboard = collapse(visual.head, visual.tail)
                 visual.setpos(position)
@@ -108,6 +111,16 @@ def interpret(visual, keyboard):
         else:
             visual.document.commit(head, tail)
 
+def do_action(visual, action):
+    if visual.action != action:
+        visual.action = action
+        visual.continuation = action(visual)
+    try:
+        visual.continuation.next()
+    except StopIteration:
+        visual.action = None
+        visual.continuation = None
+
 def start_completion(visual):
     head = visual.head
     assert head.cell.symbol
@@ -117,40 +130,12 @@ def start_completion(visual):
         if rule.label.startswith(query):
             result.append(rule)
     result.sort(key=lambda rule: rule.label)
-    block = result[0].blank()
-    replace(head.cell, block)
-    visual.setpos(Position.top(block))
-# def completion(visual):
-#     workspace = visual.workspace
-#     head = visual.head
-#     if visual.chain[0] == 'completion':
-#         _, block, result, index = visual.chain
-#         new_block = result[index].blank()
-#         Position(block, 0).replace([new_block])
-#         visual.setpos(
-#             Position.top(new_block),
-#             chain = ('completion',
-#                 new_block,
-#                 result,
-#                 (index + 1) % len(result)))
-#     elif head.subj.issymbol():
-#         result = []
-#         active = workspace.active_schema(head.subj)
-#         name = head.subj[:]
-#         for rule in active.rules:
-#             if rule.startswith(name):
-#                 result.append(active.rules[rule])
-#         block = result[0].blank()
-#         head.replace([block])
-#         visual.setpos(
-#             Position.top(block),
-#             chain = ('completion',
-#                 block,
-#                 result,
-#                 1 % len(result)))
-#     else:
-#         raise Exception("not implemented")
-
+    for rule in result:
+        block = rule.blank()
+        replace(head.cell, block)
+        visual.setpos(Position.top(block))
+        yield None
+        visual.head, visual.tail = visual.document.undo()
 
 import parsing
 reload(parsing)
@@ -162,41 +147,12 @@ def start_composition(visual):
             raise Exception("not implemented")
     context = cell.context
     assert context
-    result = iter(parsing.parse(cell.copy(), context.rules)).next()
-    new_block = result.wrap()
-    replace(cell, new_block)
-    visual.setpos(Position.bottom(new_block))
-
-# def composition(visual):
-#     if visual.chain[0] == 'composition':
-#         _, block, result, repeat = visual.chain
-#         try:
-#             new_block = result.next().build()
-#             Position(block, 0).replace([new_block])
-#             visual.setpos(
-#                 Position.bottom(new_block),
-#                 chain = ('composition', new_block, result, repeat))
-#         except StopIteration:
-#             visual.setpos(
-#                 visual.head, visual.tail,
-#                 chain = ('composition', block, repeat(), repeat))
-#             return composition(visual)
-#     else:
-#         subj = visual.head.subj
-#         while subj.label != '@':
-#             subj = subj.parent
-#             if subj is None:
-#                 raise Exception("not implemented")
-#         active = visual.workspace.active_schema(subj)
-#         ctx = visual.workspace.active_schema(subj).recognize_in_context(subj)
-#         assert isinstance(ctx, Context), ctx
-#         repeat = lambda: iter(parsing.parse(subj.copy(), ctx.all_valid_rules))
-#         result = repeat()
-#         new_block = result.next().build()
-#         Position(subj, 0).replace([new_block])
-#         visual.setpos(
-#             Position.bottom(new_block),
-#             chain = ('composition', new_block, result, repeat))
+    for result in parsing.parse([c.copy() for c in cell], context.rules):
+        new_block = result.wrap()
+        replace(cell, new_block)
+        visual.setpos(Position.bottom(new_block))
+        yield None
+        visual.head, visual.tail = visual.document.undo()
 
 def start_expansion(visual):
     # slightly incorrect, should find the position where expansion is allowable.
@@ -206,52 +162,73 @@ def start_expansion(visual):
     above.cell.put(above.index, [expansion])
     visual.setpos(Position(forest[0], visual.head.index))
 
+def replace(cell, newcell):
+    parent = cell.parent
+    index = parent.index(cell)
+    drop = parent.drop(index, index+1)
+    parent.put(index, [newcell])
+    return drop
+
+
 def collapse(head, tail):
     if head.cell is tail.cell:
         start = min(head.index, tail.index)
         stop = max(head.index, tail.index)
         return head, head.cell.drop(start, stop)
-    common, left, right = head.cell.order(tail.cell)
-    g0 = fault_line(common, left, Cell.is_leftmost)
-    g1 = fault_line(common, right, Cell.is_rightmost)
-    i0 = g0.pop(0)
-    i1 = g1.pop(0)
-    while len(g0) == len(g1) == 0 and i0 == 0 and i1 == len(common)-1 and common.parent and len(common.label) > 0:
-        i0 = i1 = common.parent.index(common)
-        common = common.parent
-    position, dropped = collapse_range(common, i0, i1+1)
-    if len(dropped) == 1:
-        return position, dropped
-    else:
-        leftbound = dropped.pop(0)
-        rightbound = dropped.pop(-1)
-        prefix = []
-        for i in g0:
-            sequence = leftbound.dissolve()
-            prefix = prefix + sequence[:i]
-            leftbound = sequence[i]
-            dropped = sequence[i+1:] + dropped
-        dropped = [leftbound] + dropped
-        postfix = []
-        for i in g1:
-            sequence = rightbound.dissolve()
-            dropped = dropped + sequence[:i]
-            rightbound = sequence[i]
-            postfix = sequence[i+1:] + postfix
-        dropped = dropped + [rightbound]
-        new_position = Position(TextCell(u""), 0)
-        put(position, trim(prefix + [new_position.cell] + postfix, []))
-        return new_position, dropped
+    common, left, right = relax(head.cell.order(tail.cell))
+    context = common.context
+    rule = common.rule
 
-def collapse_range(cell, start, stop):
-    rule = cell.rule
-    dropped = cell.drop(start, stop)
-    placeholder = Position(TextCell(u""), 0)
-    cell.put(start, [placeholder.cell])
-    if rule and not rule.validate(cell):
-        cell = carve_turnip(cell)
-        placeholder = Position(cell[start], 0)
-    return placeholder, dropped
+    start = left.parent.index(left)
+    stop = right.parent.index(right)+1
+    while left.parent != common:
+        start = left.parent.unwrap()[1]
+    while right.parent != common:
+        stop = right.parent.unwrap()[2]
+    tempcell = ListCell(u'@', [])
+    common.wrap(start, stop, tempcell)
+    postorder_trim(tempcell)
+
+    start = tempcell.index(left)
+    stop = tempcell.index(right)+1
+    dropped = tempcell.drop(start, stop)
+    placeholder = TextCell(u"")
+    tempcell.put(start, placeholder)
+    if rule and not rule.validate(common):
+        tempcell.unwrap()
+        shred(common)
+    if isinstance(rule, (Star, Plus)) and context and all(context.match(cell) for cell in tempcell):
+        tempcell.unwrap()
+    return Position(placeholder, 0), dropped
+
+def relax(common, left, right):
+    def flow(boundary, cell, cond, repeat):
+        parent = cell.parent
+        while len(parent.label) == 0 and parent != boundary and parent.is_rightmost():
+            parent = parent.parent
+        if parent != boundary and len(parent.label) > 0:
+            if repeat:
+                return flow(boundary, parent, cond, repeat)
+            else:
+                return parent
+        else:
+            return cell
+    left = flow(common, left, Cell.is_leftmost, True)
+    right = flow(common, right, Cell.is_rightmost, True)
+    lhs = flow(None, left, Cell.is_leftmost, False)
+    rhs = flow(None, right, Cell.is_rightmost, False)
+    if lhs is rhs and lhs.parent is not None:
+        return lhs.parent, lhs, rhs
+    else:
+        return common, lhs, rhs
+
+def trim(forest, result):
+    for cell in forest:
+        if isinstance(cell, ListCell) and len(cell.label) == 0:
+            trim(cell.dissolve(), result)
+        else:
+            result.append(cell)
+    return result
 
 def fault_line(target, cell, cond):
     result = []
@@ -263,6 +240,8 @@ def fault_line(target, cell, cond):
     result.reverse()
     return result
 
+
+## The next three functions need to be rethought.
 def fall_left(position):
     data = position.cell.drop(0, position.index)
     cell = position.cell
@@ -295,26 +274,6 @@ def fall_right(position):
         cell = position.cell
         position = position.above+1
 
-def join_left(position):
-    lhs = Position.bottom(position.cell.previous_external)
-    rhs = carve(position)
-    return put(lhs, rhs[:])[0]
-
-def join_right(position):
-    rhs = Position.top(position.cell.next_external)
-    lhs = carve(position)
-    return put(rhs, lhs[:])[1]
-
-def carve(position):
-    above = position.above
-    if can_carve(above.cell):
-        cell = above.cell.drop(above.index, above.index+1)[0]
-        return cell
-    else:
-        cell = above.cell.drop(above.index, above.index+1)[0]
-        carve_turnip(above.cell)
-        return cell
-
 def can_carve(cell):
     rule = cell.rule
     if isinstance(rule, Star):
@@ -324,21 +283,17 @@ def can_carve(cell):
     if cell.parent is None:
         return True
 
-def carve_turnip(cell):
-    parent = cell.parent
-    index = parent.index(cell)
-    cell = parent.drop(index, index+1)[0]
-    new_cell = ListCell(u"@", trim(cell.dissolve(), []))
-    parent.put(index, [new_cell])
-    return new_cell
 
-def trim(forest, result):
-    for cell in forest:
-        if isinstance(cell, ListCell) and len(cell.label) == 0:
-            trim(cell.dissolve(), result)
-        else:
-            result.append(cell)
-    return result
+def join_left(position):
+    lhs = Position.bottom(position.cell.previous_external)
+    rhs = carve(position.cell)
+    return put(lhs, rhs[:])[0]
+
+def join_right(position):
+    rhs = Position.top(position.cell.next_external)
+    lhs = carve(position.cell)
+    return put(rhs, lhs[:])[1]
+
 
 def split_left(position):
     data = position.cell.drop(0, position.index)
@@ -390,70 +345,87 @@ def can_insert(cell):
 def insert_blank(position):
     blank = TextCell(u"")
     if can_insert(position.cell):
+        rule = position.cell.rule
+        if rule:
+            blank = rule.at(position.index).blank()
+        else:
+            blank = TextCell(u"")
         position.cell.put(position.index, [blank])
     else:
-        cell = carve_turnip(position.cell)
-        cell.put(position.index, [blank])
+        position.cell.put(position.index, [blank])
+        shred(position.cell)
     return Position.top(blank)
 
+
 def put(position, data):
+    if isinstance(position.cell, ListCell):
+        rule = position.cell.rule
+        if rule:
+            blank = rule.at(position.index).blank()
+        else:
+            blank = TextCell(u"")
+        position.cell.put(position.index, [blank])
+        return put(Position.top(blank), data)
     if isinstance(data, list):
-        if len(data) == 1:
-            return putcell(position, data[0])
-        else:
-            return putforest(position, data)
-    elif isinstance(position.cell, TextCell):
-        return puttext(position, data)
-    elif position.cell.is_external():
-        blank = TextCell(u"")
-        position.cell.put(0, [blank])
-        return put(Position.bottom(blank), data)
-    else:
-        raise Exception("bad put")
-
-def putcell(position, cell):
-    if position.cell.is_blank():
-        context = position.cell.context
-        if context:
-            if context.match(cell):
-                replace(position.cell, cell)
-            else:
-                replace(position.cell, ListCell(u"@", [cell]))
-            return Position.top(cell), Position.bottom(cell)
-        else:
-            replace(position.cell, cell)
-            return Position.top(cell), Position.bottom(cell)
-    else:
-        raise Exception("not implemented")
-
-def putforest(position, data):
-    if position.cell.is_blank():
+        if not position.cell.is_blank():
+            split_left(position)
+            split_right(position)
+        assert position.cell.is_blank()
         parent = position.cell.parent
         index = parent.index(position.cell)
-        context = position.cell.context
-        if context and can_insert(parent):
-            if all(context.match(cell) for cell in data):
-                parent.drop(index, index+1)
-                parent.put(index, data)
-                return Position.top(data[0]), Position.bottom(data[-1])
-        replace(position.cell, ListCell(u"@", data))
+        context = parent.context
+        rule = parent.rule
+        parent.drop(index, index+1)
+        if context and not all(context.match(cell) for cell in data):
+            parent.put(index, [ListCell("@", [data])])
+        elif not isinstance(rule, (Star, Plus)) and len(data) > 1:
+            parent.put(index, [ListCell("@", [data])])
+        else:
+            parent.put(index, data)
+        if rule and not rule.validate(parent):
+            shred(parent)
         return Position.top(data[0]), Position.bottom(data[-1])
     else:
-        raise Exception("not implemented")
+        position.cell.put(position.index, data)
+        return position, position+len(data)
 
-def puttext(position, data):
-    position.cell.put(position.index, data)
-    return position, position + len(data)
 
-def remove(cell):
+def carve(cell):
+    "Removes the cell, no longer valid structures are shredded"
     parent = cell.parent
     index = parent.index(cell)
-    drop = parent.drop(index, index+1)
-    return drop
+    rule = parent.rule
+    parent.drop(index, index+1)
+    if rule and not rule.validate(parent):
+        shred(parent)
+    return cell
 
-def replace(cell, newcell):
-    parent = cell.parent
-    index = parent.index(cell)
-    drop = parent.drop(index, index+1)
-    parent.put(index, [newcell])
-    return drop
+def collapse_range(cell, start, stop):
+    "Collapses within a cell, if the cell no longer validates, it is shredded"
+    rule = cell.rule
+    dropped = cell.drop(start, stop)
+    placeholder = TextCell(u"")
+    cell.put(start, [placeholder])
+    if rule and not rule.validate(cell):
+        shred(cell)
+    return Position(placeholder, 0), dropped
+
+def postorder_trim(segment):
+    "Unwrap every unlabelled list cell in post-order"
+    trim_out = []
+    for cell in segment:
+        if isinstance(cell, ListCell) and len(cell.label) == 0:
+            postorder_trim(cell)
+            trim_out.append(cell)
+    for cell in trim_out:
+        cell.unwrap()
+
+def shred(cell):
+    "Takes out all list cells belonging to a structure."
+    while len(cell.label) == 0 and cell.parent:
+        cell = cell.parent
+    postorder_trim(new_cell)
+    parent, start, stop = cell.unwrap()
+    new_cell = ListCell("@", [])
+    parent.wrap(start, stop, new_cell)
+    return new_cell

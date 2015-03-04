@@ -1,4 +1,6 @@
 from random import randint
+import os
+import tempfile
 import textended
 
 class Document(object):
@@ -11,7 +13,7 @@ class Document(object):
 
     def _insert(self, cell):
         assert self is not None
-        assert cell.document is None
+        assert cell.document is None or cell.document is self
         cell.document = self
         if cell.ident == "" or cell.ident in self.cells:
             ident = chr(randint(1, 255))
@@ -26,7 +28,6 @@ class Document(object):
 
     def _remove(self, cell):
         assert cell.document is self
-        cell.document = None
         del self.cells[cell.ident]
         if isinstance(cell, ListCell):
             for subcell in cell:
@@ -241,12 +242,12 @@ class ListCell(Cell):
 
     def put(self, index, contents):
         index = max(0, min(len(self), index))
-        self.contents = self.contents[:index] + contents + self.contents[index:]
         for cell in contents:
             assert isinstance(cell, Cell)
             assert cell.parent is None
             cell.parent = self
             self.document._insert(cell)
+        self.contents = self.contents[:index] + contents + self.contents[index:]
         self.document.unstaged.append((self, 'drop', index, index+len(contents)))
 
     def yank(self, start, stop):
@@ -268,7 +269,7 @@ class ListCell(Cell):
         self.parent = None
         self.document.unstaged.append((parent, 'wrap', index, index+length, self))
         self.document._remove(self)
-        return index, index+length, self
+        return parent, index, index+length
 
     def wrap(self, start, stop, cell):
         assert len(cell.contents) == 0 and cell.parent is None

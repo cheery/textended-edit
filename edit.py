@@ -24,6 +24,8 @@ class Visual(object):
         self.scroll_y = 0
         self.head = Position.bottom(document.body)
         self.tail = self.head
+        self.action = None
+        self.continuation = None
 
     def pick(self, x, y, drag=False):
         nearest = None
