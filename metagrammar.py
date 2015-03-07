@@ -5,8 +5,10 @@ def new_metagrammar():
 
     contexes['stmt'] = stmt = Context('stmt')
     contexes['expr'] = expr = Context('expr')
+    contexes['term'] = term = Context('term')
 
     expr.rules.update([symbol])
+    term.rules.update([symbol, string])
 
     def group(context, group):
         rule = Group(group)
@@ -24,9 +26,10 @@ def new_metagrammar():
         return rule
 
     return Grammar(stmt, {
-        'context': group(stmt, [symbol, Star(symbol)]),
+        'context': group(stmt, [symbol, Star(term)]),
         'group': star(expr, expr),
         'plus': group(expr, [expr]),
+        'precedence': group(term, [string, symbol, symbol]),
         'rule': group(stmt, [symbol, Star(symbol), expr]),
         'star': group(expr, [expr]),
         'toplevel': group(stmt, [symbol]),
@@ -57,6 +60,7 @@ class Builder(object):
         return self.contexes[name]
 
     def build_context(self, context, cell):
+        assert isinstance(cell, Cell), repr(cell)
         pre, rule = context.match(cell)
         if rule is None:
             raise Exception("syn error {!r}, expected {}".format(cell, context.name))
@@ -66,12 +70,14 @@ class Builder(object):
             if cell[:] == 'string':
                 return string
             return self.context(cell[:])
+        elif rule is string:
+            return Keyword(cell[:])
         elif rule.label == 'rule':
             name, contexes, body = rule(self, cell)
             self.rules[name] = body
             for name in contexes:
                 self.context(name).rules.add(body)
-        elif rule.label == 'bind':
+        elif rule.label == 'context':
             name, terms = rule(self, cell)
             context = self.context(name)
             for term in terms:
@@ -79,6 +85,9 @@ class Builder(object):
                     context.contexes.add(term)
                 else:
                     context.rules.add(term)
+        elif rule.label == 'precedence':
+            keyword, precedence, precedence_bind = rule(self, cell)
+            return Keyword(keyword, int(precedence), precedence_bind)
         elif rule.label == 'toplevel':
             name, = rule(self, cell)
             self.toplevel = self.context(name)
@@ -89,12 +98,13 @@ class Builder(object):
         elif rule.label == 'plus':
             return Plus(rule(self, cell)[0])
         else:
-            raise Exception("not implemented {}".format(rule))
+            raise Exception("not implemented {} label={}".format(rule, rule.label))
 
     def build_textcell(self, term, cell):
         return cell[:]
 
     def build_group(self, sequence, cell):
+        print sequence, cell
         return [r(self, c) for r, c in zip(sequence, cell)]
 
     def build_star(self, star, cell):

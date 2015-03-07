@@ -1,4 +1,4 @@
-from dom import TextCell, ListCell
+from dom import Cell, TextCell, ListCell
 
 class Grammar(object):
     def __init__(self, toplevel, rules, contexes):
@@ -21,7 +21,7 @@ class Grammar(object):
             return modeline
         if modeblock.validate(cell):
             return modeblock
-        if turnip.validate(cell) or cell.label == '@':
+        if turnip.validate(cell):
             return turnip
         if len(cell.label) > 0 and cell.label in self.rules:
             rule = self.rules[cell.label]
@@ -36,14 +36,16 @@ class Grammar(object):
                 return rule
 
     def recognize_context(self, cell):
+        if cell.parent is None:
+            return self.toplevel
         rule = self.recognize(cell.parent)
         if isinstance(rule, ListRule):
             rule = rule.at(cell.parent.index(cell))
-            if isinstance(rule, Context):
-                return rule
+            return rule
 
 class Rule(object):
-    pass
+    def match(self, cell):
+        return [], (self if self.validate(cell) else None)
 
 class ListRule(Rule):
     label = ""
@@ -62,11 +64,14 @@ class Group(ListRule):
     def __len__(self):
         return len(self.contents)
 
+    def __repr__(self):
+        return '{{{}}}'.format(', '.join(map(repr, self)))
+
     def at(self, index):
         return self[index]
 
     def blank(self):
-        return ListCell(self.label, [r.blank() for r in self])
+        return ListCell(self.label, [r.placeholder() for r in self])
 
     def validate(self, cell):
         if not isinstance(cell, ListCell):
@@ -83,6 +88,9 @@ class Star(ListRule):
         self.rule = rule
         self.label = label
 
+    def __repr__(self):
+        return '{}*'.format(self.rule)
+
     def at(self, index):
         return self.rule
 
@@ -94,7 +102,7 @@ class Star(ListRule):
             return False
         if cell.label != self.label:
             return False
-        return all(self.rule.validate(c) for c in cell)
+        return all(self.rule.validate(c) or cell.symbol or turnip.validate(cell) for c in cell)
 
 class Plus(ListRule):
     def __call__(self, builder, cell):
@@ -104,11 +112,14 @@ class Plus(ListRule):
         self.rule = rule
         self.label = label
 
+    def __repr__(self):
+        return '{}+'.format(self.rule)
+
     def at(self, index):
         return self.rule
 
     def blank(self):
-        return ListCell(self.label, [self.rule.blank()])
+        return ListCell(self.label, [self.rule.placeholder()])
 
     def validate(self, cell):
         if not isinstance(cell, ListCell):
@@ -117,7 +128,7 @@ class Plus(ListRule):
             return False
         if cell.label != self.label:
             return False
-        return all(self.rule.validate(c) for c in cell)
+        return all(self.rule.validate(c) or cell.symbol or turnip.validate(cell) for c in cell)
 
 class Context(Rule):
     def __call__(self, builder, cell):
@@ -129,15 +140,24 @@ class Context(Rule):
         self.contexes = set()
         self.indirect_rules = []
 
+    def __repr__(self):
+        return "<{}>".format(self.name)
+
     def blank(self):
         return TextCell(u"")
 
     def match(self, cell):
+        assert isinstance(cell, Cell)
+        if self.name is None:
+            return [], self
         for rule in self.rules:
             if rule.validate(cell):
                 return [], rule
         for pre, rule in self.indirect_rules:
             if rule.validate(cell):
+                if hasattr(rule, 'check'):
+                    if not rule.check(cell):
+                        continue
                 return pre, rule
         return [], None
 
@@ -169,8 +189,23 @@ class Symbol(Rule):
     def validate(self, cell):
         return isinstance(cell, TextCell) and cell.symbol
 
-#class RegEx(Symbol):
-#    pass
+class Keyword(Rule):
+    def __init__(self, keyword, precedence, precedence_bind):
+        self.keyword = keyword
+        self.precedence = precedence
+        self.precedence_bind = precedence_bind
+
+    def __call__(self, builder, cell):
+        return builder.build_textcell(self, cell)
+
+    def blank(self):
+        return TextCell(keyword)
+
+    def validate(self, cell):
+        return isinstance(cell, TextCell) and cell.symbol
+
+    def match(self, cell):
+        return [], (self if self.validate(cell) and cell[:] == self.keyword else None)
 
 class String(Rule):
     def __call__(self, builder, cell):
@@ -181,6 +216,9 @@ class String(Rule):
 
     def validate(self, cell):
         return isinstance(cell, TextCell) and not cell.symbol
+
+    def placeholder(self):
+        return TextCell(u"", symbol=False)
 
 symbol = Symbol()
 string = String()

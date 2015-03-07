@@ -274,13 +274,14 @@ class ListCell(Cell):
     def wrap(self, start, stop, cell):
         assert len(cell.contents) == 0 and cell.parent is None
         cell.parent = self
-        cell.document._insert(cell)
+        self.document._insert(cell)
         cell.contents = self.contents[start:stop]
         self.contents[start:stop] = [cell]
         for subcell in cell.contents:
             assert subcell.parent is self
             subcell.parent = cell
         self.document.unstaged.append((cell, 'unwrap'))
+        return cell
 
 def transform_enc(cell):
     "warning: document format will change if the new document model turns out to be sufficient."

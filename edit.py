@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from boxmodel import hpack
 from compositor import Compositor
 from ctypes import byref

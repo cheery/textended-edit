@@ -7,7 +7,7 @@ class Workspace(object):
     def __init__(self):
         self.documents = {}
         self.grammars = {}
-        self.clipboard = None
+        self.clipboard = ""
 #        self.unbound = []
 #        self.schema_cache = {}
 #

@@ -1,8 +1,13 @@
 from dom import Cell, TextCell, ListCell
-from grammar import modeline, Star, Plus
+from grammar import modeline, turnip, Star, Plus, Context
 from position import Position
 import sys
 import traceback
+
+def copy_forest(forest):
+    if isinstance(forest, list):
+        return [c.copy() for c in forest]
+    return forest
 
 def interpret(visual, keyboard):
     for key, mod, text in keyboard:
@@ -41,9 +46,10 @@ def interpret(visual, keyboard):
             elif key == 'x' and 'ctrl' in mod:
                 position, clipboard = collapse(visual.head, visual.tail)
                 visual.setpos(position)
-                position.cell.document.workspace.clipboard = clipboard
+                position.cell.document.workspace.clipboard = copy_forest(clipboard)
             elif key == 'v' and 'ctrl' in mod:
                 position, clipboard = collapse(visual.head, visual.tail)
+                clipboard = copy_forest(position.cell.document.workspace.clipboard)
                 visual.setpos(put(position, clipboard)[1])
             elif key == 'z' and 'ctrl' in mod:
                 visual.head, visual.tail = visual.document.undo()
@@ -63,6 +69,9 @@ def interpret(visual, keyboard):
                     head += 1
                 tail = visual.tail if 'shift' in mod else head 
                 visual.setpos(head, tail)
+            elif key == 'backspace' and 'ctrl' in mod:
+                break_to_boundary(visual.head.cell, boundary(visual.head.cell.parent))
+                visual.setpos(head)
             elif key == 'backspace':
                 if visual.head == visual.tail:
                     if visual.head.on_left_boundary:
@@ -178,68 +187,66 @@ def collapse(head, tail):
     common, left, right = relax(head.cell.order(tail.cell))
     context = common.context
     rule = common.rule
+    bound = boundary(common)
 
-    start = left.parent.index(left)
-    stop = right.parent.index(right)+1
-    while left.parent != common:
-        start = left.parent.unwrap()[1]
-    while right.parent != common:
-        stop = right.parent.unwrap()[2]
-    tempcell = ListCell(u'@', [])
-    common.wrap(start, stop, tempcell)
-    postorder_trim(tempcell)
+    assert left != common != right
 
-    start = tempcell.index(left)
-    stop = tempcell.index(right)+1
-    dropped = tempcell.drop(start, stop)
-    placeholder = TextCell(u"")
-    tempcell.put(start, placeholder)
-    if rule and not rule.validate(common):
-        tempcell.unwrap()
-        shred(common)
-    if isinstance(rule, (Star, Plus)) and context and all(context.match(cell) for cell in tempcell):
-        tempcell.unwrap()
-    return Position(placeholder, 0), dropped
-
-def relax(common, left, right):
-    def flow(boundary, cell, cond, repeat):
-        parent = cell.parent
-        while len(parent.label) == 0 and parent != boundary and parent.is_rightmost():
-            parent = parent.parent
-        if parent != boundary and len(parent.label) > 0:
-            if repeat:
-                return flow(boundary, parent, cond, repeat)
-            else:
-                return parent
+    if left is not right:
+        if left.parent != common:
+            while left.parent.parent != common:
+                left.parent.unwrap()
+            start = common.index(left.parent)
         else:
-            return cell
-    left = flow(common, left, Cell.is_leftmost, True)
-    right = flow(common, right, Cell.is_rightmost, True)
-    lhs = flow(None, left, Cell.is_leftmost, False)
-    rhs = flow(None, right, Cell.is_rightmost, False)
-    if lhs is rhs and lhs.parent is not None:
-        return lhs.parent, lhs, rhs
+            start = common.index(left)
+
+        if right.parent != common:
+            while right.parent.parent != common:
+                right.parent.unwrap()
+            stop = common.index(right.parent) + 1
+        else:
+            stop = common.index(right) + 1
+
+        cell = common.wrap(start, stop, ListCell('@', []))
+        if left.parent != cell:
+            left.parent.unwrap()
+        if right.parent != cell:
+            right.parent.unwrap()
+        postorder_trim(cell)
     else:
-        return common, lhs, rhs
+        cell = common
 
-def trim(forest, result):
-    for cell in forest:
-        if isinstance(cell, ListCell) and len(cell.label) == 0:
-            trim(cell.dissolve(), result)
-        else:
-            result.append(cell)
-    return result
+    index = cell.index(left)
+    dropped = cell.drop(index, cell.index(right) + 1)
+    blank = TextCell(u'')
+    cell.put(index, [blank])
 
-def fault_line(target, cell, cond):
-    result = []
-    while cond(cell) and cell.parent != target:
+    if not (rule and rule.validate(common)):
+        common = break_to_boundary(common, bound)
+        rule = common.rule
+    if cell is not common and isinstance(rule, (Plus,Star)) and all(rule.rule.match(c)[1] is not None for c in cell):
+        cell.unwrap()
+    return Position(blank, 0), dropped
+
+def relax((common, left, right)):
+    cell = wasleft = left
+    while len(common.label) != 0 and common.parent:
+        common = common.parent
+    while cell.is_leftmost() and cell != common:
+        if len(cell.label) > 0:
+            wasleft = cell
         cell = cell.parent
-    while cell != target:
-        result.append(cell.parent.index(cell))
+        if len(cell.label) > 0:
+            left = cell
+    cell = wasright = right
+    while cell.is_rightmost() and cell != common:
+        if len(cell.label) > 0:
+            wasright = cell
         cell = cell.parent
-    result.reverse()
-    return result
-
+        if len(cell.label) > 0:
+            right = cell
+    if left is right:
+        return left.parent, left, right
+    return wasleft.order(wasright)
 
 ## The next three functions need to be rethought.
 def fall_left(position):
@@ -250,11 +257,11 @@ def fall_left(position):
         if cell.is_blank() and can_carve(position.cell) and position.above:
             position.cell.drop(position.index, position.index+1)
         elif can_insert(position.cell):
-            return put(insert_blank(position), data)[1]
+            return put(split_in(position), data)[1]
         elif not position.on_left_boundary:
             pos = climb_left(position.cell[position.index-1], None)
             if pos:
-                return put(insert_blank(pos), data)[1]
+                return put(split_in(pos), data)[1]
         cell = position.cell
         position = position.above
 
@@ -266,11 +273,11 @@ def fall_right(position):
         if cell.is_blank() and can_carve(position.cell) and position.above:
             position.cell.drop(position.index-1, position.index)
         elif can_insert(position.cell):
-            return put(insert_blank(position), data)[0]
+            return put(split_in(position), data)[0]
         elif not position.on_right_boundary:
             pos = climb_right(position.cell[position.index], None)
             if pos:
-                return put(insert_blank(pos), data)[0]
+                return put(split_in(pos), data)[0]
         cell = position.cell
         position = position.above+1
 
@@ -300,10 +307,10 @@ def split_left(position):
     position = position.above
     while True:
         if can_insert(position.cell):
-            return put(insert_blank(position), data)[1]
+            return put(split_in(position), data)[1]
         elif not position.on_left_boundary:
             position = climb_left(position.cell[position.index-1], position)
-            return put(insert_blank(position), data)[1]
+            return put(split_in(position), data)[1]
         else:
             position = position.above
 
@@ -312,10 +319,10 @@ def split_right(position):
     position = position.above+1
     while True:
         if can_insert(position.cell):
-            return put(insert_blank(position), data)[0]
+            return put(split_in(position), data)[0]
         elif not position.on_right_boundary:
             position = climb_right(position.cell[position.index], position)
-            return put(insert_blank(position), data)[0]
+            return put(split_in(position), data)[0]
         else:
             position = position.above+1
 
@@ -335,6 +342,53 @@ def climb_right(cell, otherwise):
     else:
         return otherwise
 
+def put(position, data):
+    assert position.cell.is_external()
+    if isinstance(position.cell, ListCell):
+        blank = TextCell(u"")
+        position.cell.put(position.index, [blank])
+        return put(Position(blank, 0), data)
+    if isinstance(data, list):
+        if not position.cell.is_blank():
+            split_left(position)
+            split_right(position)
+        assert position.cell.is_blank()
+        bound = boundary(position.cell)
+        context = position.cell.context
+        parent = position.cell.parent
+        valid = context and all(context.match(c)[1] for c in data)
+
+        if valid and (len(data) == 1 or isinstance(parent.rule, (Star, Plus))):
+            index = parent.index(position.cell)
+            parent.drop(index, index+1)
+            parent.put(index, data)
+        elif position.cell == bound:
+            index = parent.index(position.cell)
+            parent.drop(index, index+1)
+            parent.put(index, [ListCell('@', data)])
+        else:
+            break_to_boundary(position.cell, bound)
+            index = parent.index(position.cell)
+            parent.drop(index, index+1)
+            parent.put(index, data)
+        return Position.top(data[0]), Position.bottom(data[-1])
+    else:
+        position.cell.put(position.index, data)
+        return position, position+len(data)
+
+def carve(cell):
+    "Removes the cell, no longer valid structures are placeholded"
+    rule = cell.parent.rule
+    if isinstance(rule, Star) or (isinstance(rule, Plus) and len(cell.parent) > 1):
+        index = cell.parent.index(cell)
+        return cell.parent.drop(index, index+1)[0]
+#    elif isinstance(rule, Plus): # probably a bug
+#        break_to_boundary(cell, boundary(cell.parent.parent))
+#        return carve(cell)
+    else:
+        break_to_boundary(cell, boundary(cell.parent))
+        return carve(cell)
+
 def can_insert(cell):
     rule = cell.rule
     if isinstance(rule, (Star, Plus)):
@@ -342,73 +396,38 @@ def can_insert(cell):
     if cell.parent is None:
         return True
 
-def insert_blank(position):
-    blank = TextCell(u"")
-    if can_insert(position.cell):
-        rule = position.cell.rule
-        if rule:
-            blank = rule.at(position.index).blank()
-        else:
-            blank = TextCell(u"")
-        position.cell.put(position.index, [blank])
-    else:
-        position.cell.put(position.index, [blank])
-        shred(position.cell)
-    return Position.top(blank)
-
-
-def put(position, data):
-    if isinstance(position.cell, ListCell):
-        rule = position.cell.rule
-        if rule:
-            blank = rule.at(position.index).blank()
-        else:
-            blank = TextCell(u"")
-        position.cell.put(position.index, [blank])
-        return put(Position.top(blank), data)
-    if isinstance(data, list):
-        if not position.cell.is_blank():
-            split_left(position)
-            split_right(position)
-        assert position.cell.is_blank()
-        parent = position.cell.parent
-        index = parent.index(position.cell)
-        context = parent.context
-        rule = parent.rule
-        parent.drop(index, index+1)
-        if context and not all(context.match(cell) for cell in data):
-            parent.put(index, [ListCell("@", [data])])
-        elif not isinstance(rule, (Star, Plus)) and len(data) > 1:
-            parent.put(index, [ListCell("@", [data])])
-        else:
-            parent.put(index, data)
-        if rule and not rule.validate(parent):
-            shred(parent)
-        return Position.top(data[0]), Position.bottom(data[-1])
-    else:
-        position.cell.put(position.index, data)
-        return position, position+len(data)
-
-
-def carve(cell):
-    "Removes the cell, no longer valid structures are shredded"
+def boundary(cell):
+    "Find a fitting boundary"
+    if isinstance(cell.context, Context):
+        return cell
     parent = cell.parent
-    index = parent.index(cell)
-    rule = parent.rule
-    parent.drop(index, index+1)
-    if rule and not rule.validate(parent):
-        shred(parent)
-    return cell
+    assert parent is not None
+    if isinstance(parent.rule, (Plus, Star)):
+        return cell
+    else:
+        return boundary(parent)
+
+def break_to_boundary(cell, bound):
+    "Break down to the boundary"
+    if isinstance(cell, TextCell):
+        assert cell != bound
+        cell = cell.parent
+    while cell != bound:
+        cell, start, stop = cell.unwrap()
+    postorder_trim(cell)
+    parent, start, stop = cell.unwrap()
+    return parent.wrap(start, stop, ListCell('@', []))
 
 def collapse_range(cell, start, stop):
-    "Collapses within a cell, if the cell no longer validates, it is shredded"
+    "Collapses within a cell, if the cell no longer validates, it is broken"
     rule = cell.rule
+    bound = boundary(cell)
     dropped = cell.drop(start, stop)
-    placeholder = TextCell(u"")
-    cell.put(start, [placeholder])
-    if rule and not rule.validate(cell):
-        shred(cell)
-    return Position(placeholder, 0), dropped
+    blank = TextCell(u"")
+    cell.put(start, [blank])
+    if not (rule and rule.validate(cell)):
+        break_to_boundary(cell, bound)
+    return Position(blank, 0), dropped
 
 def postorder_trim(segment):
     "Unwrap every unlabelled list cell in post-order"
@@ -420,12 +439,12 @@ def postorder_trim(segment):
     for cell in trim_out:
         cell.unwrap()
 
-def shred(cell):
-    "Takes out all list cells belonging to a structure."
-    while len(cell.label) == 0 and cell.parent:
-        cell = cell.parent
-    postorder_trim(new_cell)
-    parent, start, stop = cell.unwrap()
-    new_cell = ListCell("@", [])
-    parent.wrap(start, stop, new_cell)
-    return new_cell
+def split_in(position):
+    blank = TextCell(u"")
+    if can_insert(position.cell):
+        position.cell.put(position.index, [blank])
+    else:
+        bound = boundary(position.cell)
+        position.cell.put(position.index, [blank])
+        break_to_boundary(position.cell, bound)
+    return Position.top(blank)
