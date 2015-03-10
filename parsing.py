@@ -2,6 +2,7 @@ from collections import defaultdict
 from dom import TextCell, ListCell
 from grammar import *
 from Queue import PriorityQueue
+from time import time
 
 class Reduction(object): # Reduction represents found ListRules.
     def __init__(self, rule, values):
@@ -61,17 +62,20 @@ class Operator(object):
 # The parsing proceeds as in the http://en.wikipedia.org/wiki/Earley_parser
 # with main difference that badness increases with the size of the parse.
 # The least bad partial parses are visited first.
-def parse(sequence, expects):
+def parse(sequence, expects, timeout):
     q = PriorityQueue() # The unprocessed items end up into the queue
                         # Parsing constantly fills it up, and cannot
                         # progress after it becomes empty.
     wait = defaultdict(list) # Items that wait for reduction. (start, rule) -> [item]
     fini = defaultdict(list) # Items that have been finished at (start, rule) -> [(r_badness, stop, value)]
+    halt = time() + timeout # When we should give up.
 
     for rule in expects: # The queue is populated with initial starting states.
         q.put((0, 0, 0, rule, []))
 
     while not q.empty():
+        if halt < time():
+            raise Exception("timeout")
         badness, start, index, rule, matches = q.get_nowait()
         # Queue is filled up from the results of shifting.
         if ((isinstance(rule, Group) and len(rule) == len(matches)) or
@@ -81,8 +85,8 @@ def parse(sequence, expects):
             # Reduction usually results in one or more shifts and it is stored
             # to allow worse reductions with the same rule again.
             if start == 0 and index == len(sequence):
-                #print 'yield', rule, matches
                 yield Reduction(rule, matches)
+                halt = time() + timeout # reset halt when we succeed.
                 continue
             else:
                 result = Reduction(rule, matches)
