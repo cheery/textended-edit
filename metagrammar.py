@@ -71,7 +71,7 @@ class Builder(object):
                 return string
             return self.context(cell[:])
         elif rule is string:
-            return Keyword(cell[:])
+            return Keyword(cell[:], None, None)
         elif rule.label == 'rule':
             name, contexes, body = rule(self, cell)
             self.rules[name] = body

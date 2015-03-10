@@ -71,7 +71,7 @@ class Group(ListRule):
         return self[index]
 
     def blank(self):
-        return ListCell(self.label, [r.placeholder() for r in self])
+        return ListCell(self.label, [r.blank() for r in self])
 
     def validate(self, cell):
         if not isinstance(cell, ListCell):
@@ -119,7 +119,7 @@ class Plus(ListRule):
         return self.rule
 
     def blank(self):
-        return ListCell(self.label, [self.rule.placeholder()])
+        return ListCell(self.label, [TextCell(u"")])
 
     def validate(self, cell):
         if not isinstance(cell, ListCell):
@@ -154,10 +154,7 @@ class Context(Rule):
             if rule.validate(cell):
                 return [], rule
         for pre, rule in self.indirect_rules:
-            if rule.validate(cell):
-                if hasattr(rule, 'check'):
-                    if not rule.check(cell):
-                        continue
+            if rule.match(cell)[1]:
                 return pre, rule
         return [], None
 
@@ -183,6 +180,9 @@ class Symbol(Rule):
     def __call__(self, builder, cell):
         return builder.build_textcell(self, cell)
 
+    def __repr__(self):
+        return 'symbol'
+
     def blank(self):
         return TextCell(u"")
 
@@ -198,6 +198,9 @@ class Keyword(Rule):
     def __call__(self, builder, cell):
         return builder.build_textcell(self, cell)
 
+    def __repr__(self):
+        return '<keyword {!r}>'.format(self.keyword)
+
     def blank(self):
         return TextCell(keyword)
 
@@ -211,14 +214,14 @@ class String(Rule):
     def __call__(self, builder, cell):
         return builder.build_textcell(self, cell)
 
+    def __repr__(self):
+        return 'string'
+
     def blank(self):
         return TextCell(u"", symbol=False)
 
     def validate(self, cell):
         return isinstance(cell, TextCell) and not cell.symbol
-
-    def placeholder(self):
-        return TextCell(u"", symbol=False)
 
 symbol = Symbol()
 string = String()

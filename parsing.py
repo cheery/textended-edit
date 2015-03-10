@@ -1,81 +1,141 @@
+from collections import defaultdict
 from dom import TextCell, ListCell
 from grammar import *
+from Queue import PriorityQueue
 
-class Match(object):
-    def __init__(self, rule, start, values, reductions):
+class Reduction(object): # Reduction represents found ListRules.
+    def __init__(self, rule, values):
         self.rule = rule
-        self.start = start
         self.values = values
-        self.reductions = reductions
-
-    @property
-    def next_cat(self):
-        return self.rule.at(len(self.values))
-
-    @property
-    def incomplete(self):
-        return len(self.values) < len(self.rule)
-
-    def shift(self, value):
-        return Match(self.rule, self.start, self.values + [value], self.reductions)
-
-    def __repr__(self):
-        return '(' + self.rule.label + ' ' + ', '.join(map(repr, self.values)) + ')'
+        self.badness = 50 # Would fill up from the operator-assigned badness.
+        self.precedence = None
+        # On inconsistent operator precedence, we should add a penalty or ignore the precedence.
+        # In reduction construct with precedence information, we should acknowledge
+        # that information and penalize if it is inconsistent.
+        if len(values) == 3 and isinstance(values[1], Operator):
+            lhs, op, rhs = values
+            precedence = op.keyword.precedence
+            if precedence is not None:
+                binding = op.keyword.precedence_bind
+                if binding == 'left':
+                    lhs_prec = precedence - 1
+                    rhs_prec = precedence
+                elif binding == 'right':
+                    lhs_prec = precedence
+                    rhs_prec = precedence - 1
+                if isinstance(lhs, Reduction) and lhs.precedence is not None and lhs.precedence < lhs_prec:
+                        self.badness = 1000
+                elif isinstance(rhs, Reduction) and rhs.precedence is not None and rhs.precedence < rhs_prec:
+                        self.badness = 1000
+                else:
+                    self.badness = 0
+                self.precedence = precedence
 
     def wrap(self):
         result = []
         for item in self.values:
-            if isinstance(item, Match):
-                result.append(item.build())
+            if isinstance(item, Reduction):
+                result.append(item.wrap())
             else:
                 result.append(item.copy())
         return ListCell(self.rule.label, result)
 
-def parse(sequence, expects):
-    nonterminals = [{} for i in range(len(sequence))]
-    chart = [[] for i in range(len(sequence) + 1)]
- 
-    def scan(state, rule, index, visited):
-        if rule in visited:
-            return
-        visited.add(rule)
-        if match(rule, sequence[index]):
-            chart[index+1].append(state.shift(sequence[index]))
-        elif isinstance(rule, Group):
-            if rule in nonterminals[index]:
-                nonterminals[index][rule].append(state)
-            else:
-                nonterminals[index][rule] = reductions = [state]
-                chart[index].append(Match(rule, index, [], reductions))
-        elif isinstance(rule, Context):
-            for subrule in rule.rules:
-                scan(state, subrule, index, visited)
-            for subrule in rule.contexes:
-                scan(state, subrule, index, visited)
-    for expect in expects:
-        assert isinstance(expect, Rule)
-        if isinstance(expect, Group):
-            chart[0].append(Match(expect, 0, [], []))
-    for index in range(0, len(sequence)):
-        for state in chart[index]:
-            if state.incomplete:
-                scan(state, state.next_cat, index, set())
-            else:
-                for st in state.reductions:
-                    chart[index].append(st.shift(state))
-    completed = []
-    for state in chart[len(sequence)]:
-        if not state.incomplete:
-            if state.rule in expects and len(state.reductions) == 0:
-                completed.append(state)
-            for st in state.reductions:
-                chart[index].append(st.shift(state))
-    return completed
+# Parsing results with incorrect precedences aren't suppressed, instead they're
+# penalized harshly.
+# Operators are used to calculate badness of reductions, based on precedence rules.
+class Operator(object):
+    def __init__(self, keyword, value):
+        self.keyword = keyword
+        self.value = value
 
-def match(rule, token):
-    if isinstance(rule, Symbol) and token.symbol:
-        return True
-    if isinstance(rule, String) and isinstance(token, TextCell) and not token.symbol:
-        return True
-    if isinstance(rule, Rule):
-        return rule.validate(token)
+    def wrap(self):
+        return self.value
+
+# I have also considered to penalize results with symbols that match in the keyword
+# list, but aren't parsed as those symbols.
+
+# Penalizing in this parser isn't based on much of reasoning. Certain results are
+# penalized with arbitrary values to accept smaller and more interesting parse
+# trees to appear sooner than later.
+
+# The parsing proceeds as in the http://en.wikipedia.org/wiki/Earley_parser
+# with main difference that badness increases with the size of the parse.
+# The least bad partial parses are visited first.
+def parse(sequence, expects):
+    q = PriorityQueue() # The unprocessed items end up into the queue
+                        # Parsing constantly fills it up, and cannot
+                        # progress after it becomes empty.
+    wait = defaultdict(list) # Items that wait for reduction. (start, rule) -> [item]
+    fini = defaultdict(list) # Items that have been finished at (start, rule) -> [(r_badness, stop, value)]
+
+    for rule in expects: # The queue is populated with initial starting states.
+        q.put((0, 0, 0, rule, []))
+
+    while not q.empty():
+        badness, start, index, rule, matches = q.get_nowait()
+        # Queue is filled up from the results of shifting.
+        if ((isinstance(rule, Group) and len(rule) == len(matches)) or
+            (isinstance(rule, Plus) and len(matches) >= 1) or
+            (isinstance(rule, Star))):
+            # If shifting results in completely reduced construct, we want to reduce using it.
+            # Reduction usually results in one or more shifts and it is stored
+            # to allow worse reductions with the same rule again.
+            if start == 0 and index == len(sequence):
+                #print 'yield', rule, matches
+                yield Reduction(rule, matches)
+                continue
+            else:
+                result = Reduction(rule, matches)
+                fini[(start, rule)].append((badness, index, result))
+                for g_badness, g_start, g_rule, g_matches in wait[(start, rule)]:
+                    q.put((
+                        badness + g_badness + result.badness,
+                        g_start,
+                        index,
+                        g_rule,
+                        g_matches + [result]))
+                if isinstance(rule, Group):
+                    continue
+        if index >= len(sequence): # Some rules may appear at positions where they cannot complete.
+            continue
+        subrule = rule.at(len(matches))
+        subrules = ()
+        match = subrule.match(sequence[index])
+        if subrule.validate(sequence[index]) and match[1]:
+            if isinstance(match[1], Keyword): # Operator inserted where Keyword matches.
+                shift_badness = 1
+                term = Operator(match[1], sequence[index])
+            else:
+                shift_badness = 10
+                term = sequence[index]
+            q.put((
+                badness + shift_badness,
+                start,
+                index + 1,
+                rule,
+                matches + [term]))
+        elif isinstance(subrule, ListRule):
+            subrules = [(10, subrule)]
+        elif isinstance(subrule, Context): # Larger constructs with many indirections 
+                                           # are treated as worse results.
+            subrules = [(100, d_rule) for d_rule in subrule.rules]
+            for pre, ind_rule in subrule.indirect_rules:
+                subrules.append((100 + len(pre)*10, ind_rule))
+
+        # If there are rules that can reduce, we shift with them.
+        # Otherwise we add a blank shift to parse the rule and initiate fini to fill up.
+        for b_badness, subrule in subrules:
+            if fini.has_key((index, subrule)):
+                for r_badness, stop, result in fini[(index, subrule)]:
+                    q.put((
+                        b_badness + badness + r_badness + result.badness,
+                        start,
+                        stop,
+                        rule,
+                        matches + [result]))
+            elif isinstance(rule, ListRule):
+                q.put((0, index, index, subrule, []))
+            # Even if fini contained items, at this point we're not sure if
+            # fini still fills up, so we need to add a wait every time.
+            wait[(index, subrule)].append((b_badness+badness, start, rule, matches))
+
