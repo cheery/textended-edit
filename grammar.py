@@ -151,7 +151,7 @@ class Context(Rule):
         if self.name is None:
             return [], self
         for rule in self.rules:
-            if rule.validate(cell):
+            if rule.match(cell)[1]:
                 return [], rule
         for pre, rule in self.indirect_rules:
             if rule.match(cell)[1]:

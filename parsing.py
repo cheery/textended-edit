@@ -4,6 +4,10 @@ from grammar import *
 from Queue import PriorityQueue
 from time import time
 
+# This code has a flaw, which causes it to not produce best-scoring parsing results first.
+# The precedence rule handling can suddenly rise the badness, but the reduction may still
+# succeed, giving an insanely bad initial answer.
+
 class Reduction(object): # Reduction represents found ListRules.
     def __init__(self, rule, values):
         self.rule = rule
@@ -16,6 +20,7 @@ class Reduction(object): # Reduction represents found ListRules.
         if len(values) == 3 and isinstance(values[1], Operator):
             lhs, op, rhs = values
             precedence = op.keyword.precedence
+            print "check precedence", values, precedence, op.keyword.precedence_bind
             if precedence is not None:
                 binding = op.keyword.precedence_bind
                 if binding == 'left':
@@ -31,11 +36,13 @@ class Reduction(object): # Reduction represents found ListRules.
                 else:
                     self.badness = 0
                 self.precedence = precedence
+        if self.badness > 50:
+            print "elevated badness"
 
     def wrap(self):
         result = []
         for item in self.values:
-            if isinstance(item, Reduction):
+            if isinstance(item, (Reduction, Operator)):
                 result.append(item.wrap())
             else:
                 result.append(item.copy())
@@ -51,6 +58,9 @@ class Operator(object):
 
     def wrap(self):
         return self.value
+
+    def __repr__(self):
+        return "<Operator {} {}>".format(self.keyword, self.value)
 
 # I have also considered to penalize results with symbols that match in the keyword
 # list, but aren't parsed as those symbols.
@@ -71,8 +81,9 @@ def parse(sequence, expects, timeout):
     halt = time() + timeout # When we should give up.
 
     for rule in expects: # The queue is populated with initial starting states.
-        q.put((0, 0, 0, rule, []))
-
+        if valid_compound(rule):
+            print 'accept', rule
+            q.put((0, 0, 0, rule, []))
     while not q.empty():
         if halt < time():
             raise Exception("timeout")
@@ -118,13 +129,15 @@ def parse(sequence, expects, timeout):
                 index + 1,
                 rule,
                 matches + [term]))
-        elif isinstance(subrule, ListRule):
+        # Even if rule matched to a symbol or construct, it may match other ways too
+        if isinstance(subrule, ListRule):
             subrules = [(10, subrule)]
         elif isinstance(subrule, Context): # Larger constructs with many indirections 
                                            # are treated as worse results.
-            subrules = [(100, d_rule) for d_rule in subrule.rules]
+            subrules = [(100, d_rule) for d_rule in subrule.rules if valid_compound(d_rule)]
             for pre, ind_rule in subrule.indirect_rules:
-                subrules.append((100 + len(pre)*10, ind_rule))
+                if valid_compound(ind_rule):
+                    subrules.append((100 + len(pre)*10, ind_rule))
 
         # If there are rules that can reduce, we shift with them.
         # Otherwise we add a blank shift to parse the rule and initiate fini to fill up.
@@ -139,7 +152,14 @@ def parse(sequence, expects, timeout):
                         matches + [result]))
             elif isinstance(rule, ListRule):
                 q.put((0, index, index, subrule, []))
+                # Avoid recursion
+                fini[(start, rule)] = []
             # Even if fini contained items, at this point we're not sure if
             # fini still fills up, so we need to add a wait every time.
             wait[(index, subrule)].append((b_badness+badness, start, rule, matches))
+
+
+# The subrule.validate() takes care of other indirect rules
+def valid_compound(rule):
+    return isinstance(rule, (ListRule, Context))
 

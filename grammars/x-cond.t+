@@ -1,0 +1,5 @@
+ât+
+
+√Â##¿«grammar√átoplevel¿ìstmt√öcontext¿®stmtÉ9ç¿˛expr√4context¿yexprÉx¿Ësymbol√¬rule¿ûcondÉÍ¿stmt¿‚	cond-stmt√Èrule¿ÿelseÉÿW¿ç	cond-stmt√Ústar¿Ú∫stmt√˜rule¿GifÉã¿ı	cond-stmt¿Astmt√group¿Eexpr√ star¿9stmt√qrule¿†callÉ¿%expr√Ågroup¿éexpr√\star¿expr√>rule¿ö%cmpÉÃ¿—expr√A°group¿ªexpr√Àplus√ﬁgroup¿·symbol¿£expr√Árule¿›infixÉÅ≠¿\,expr√Zgroup¿Dexpr¿infix-op¿—(expr√Çcontext¿&infix-opÉë√A3
+precedenceÅÆ+¿à10¿Kleft√6
+precedenceÅ“*¿Õ20¿`leftˇ◊∂I¿
