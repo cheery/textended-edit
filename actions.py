@@ -156,7 +156,10 @@ def start_composition(visual):
             raise Exception("not implemented")
     context = cell.context
     assert context
-    for result in parsing.parse([c.copy() for c in cell], context.rules, timeout=0.1):
+    # My attempt to create 'best result first' parser grand failed.
+    results = list(parsing.parse([c.copy() for c in cell], context.rules, timeout=0.1))
+    results.sort(key=lambda x: x.badness)
+    for result in results:
         new_block = result.wrap()
         replace(cell, new_block)
         visual.setpos(Position.bottom(new_block))

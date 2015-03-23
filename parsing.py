@@ -9,7 +9,7 @@ from time import time
 # succeed, giving an insanely bad initial answer.
 
 class Reduction(object): # Reduction represents found ListRules.
-    def __init__(self, rule, values):
+    def __init__(self, rule, values, badness):
         self.rule = rule
         self.values = values
         self.badness = 50 # Would fill up from the operator-assigned badness.
@@ -20,7 +20,6 @@ class Reduction(object): # Reduction represents found ListRules.
         if len(values) == 3 and isinstance(values[1], Operator):
             lhs, op, rhs = values
             precedence = op.keyword.precedence
-            print "check precedence", values, precedence, op.keyword.precedence_bind
             if precedence is not None:
                 binding = op.keyword.precedence_bind
                 if binding == 'left':
@@ -36,8 +35,7 @@ class Reduction(object): # Reduction represents found ListRules.
                 else:
                     self.badness = 0
                 self.precedence = precedence
-        if self.badness > 50:
-            print "elevated badness"
+        self.badness += badness
 
     def wrap(self):
         result = []
@@ -82,7 +80,6 @@ def parse(sequence, expects, timeout):
 
     for rule in expects: # The queue is populated with initial starting states.
         if valid_compound(rule):
-            print 'accept', rule
             q.put((0, 0, 0, rule, []))
     while not q.empty():
         if halt < time():
@@ -96,15 +93,15 @@ def parse(sequence, expects, timeout):
             # Reduction usually results in one or more shifts and it is stored
             # to allow worse reductions with the same rule again.
             if start == 0 and index == len(sequence):
-                yield Reduction(rule, matches)
+                yield Reduction(rule, matches, badness)
                 halt = time() + timeout # reset halt when we succeed.
                 continue
             else:
-                result = Reduction(rule, matches)
-                fini[(start, rule)].append((badness, index, result))
+                result = Reduction(rule, matches, badness)
+                fini[(start, rule)].append((index, result))
                 for g_badness, g_start, g_rule, g_matches in wait[(start, rule)]:
                     q.put((
-                        badness + g_badness + result.badness,
+                        g_badness + result.badness,
                         g_start,
                         index,
                         g_rule,
@@ -143,9 +140,9 @@ def parse(sequence, expects, timeout):
         # Otherwise we add a blank shift to parse the rule and initiate fini to fill up.
         for b_badness, subrule in subrules:
             if fini.has_key((index, subrule)):
-                for r_badness, stop, result in fini[(index, subrule)]:
+                for stop, result in fini[(index, subrule)]:
                     q.put((
-                        b_badness + badness + r_badness + result.badness,
+                        b_badness + badness + result.badness,
                         start,
                         stop,
                         rule,
