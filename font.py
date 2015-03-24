@@ -55,7 +55,9 @@ class Font(object):
             if ch == ' ':
                 char = self.characters[ord(ch)]
                 x3 = (char['xadvance']) * scale * 0.5
-                result.append(Glue(x3, ws_shrink, ws_stretch).set_subj(text, index))
+                sp = Glue(x3, ws_shrink, ws_stretch).set_subj(text, index)
+                sp.hint = {'break': True}
+                result.append(sp)
             elif kern[1] not in self.characters:
                 result.append(self.repr_character(kern[1], scale, padding, color).set_subj(text, index))
             else:
