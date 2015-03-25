@@ -47,7 +47,7 @@ def paint(t):
     glClearColor(0.8, 0.8, 0.7, 1.0)
     glClear(GL_COLOR_BUFFER_BIT)
     compositor.clear()
-    box = toplevel(page(), env, page_width=width-20)#, line_break=line_break)
+    box = toplevel(page(), env, page_width=width-20, line_break=line_break)
     compositor.compose(box, 10, box.height + 10)
     compositor.render(0, 0, width, height)
 

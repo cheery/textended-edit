@@ -24,6 +24,8 @@ class Environ(object):
         env = cls(None, values)
         if 'line_break' not in values:
             env.values['line_break'] = line_break_greedy
+        if 'text_align' not in values:
+            env.values['text_align'] = line_justify
         return env
 
 def fold(item, env):
@@ -112,41 +114,58 @@ def line_break_greedy_justify(paragraph, env):
             breakpoint = len(line)
     yield hpack(line)
 
-#
+# Somewhat less clumsy implementation of minimum raggedness algorithm.
 def line_break(paragraph, env):
-    memoized = {}
+    length = len(paragraph)
     page_width = env.page_width
-    def calc(start):
-        if start >= len(paragraph):
-            return len(paragraph), 0
-        if start in memoized:
-            return memoized[start]
-        width = paragraph[start].width
-        stop = start + 1
-        best = None
-        while stop < len(paragraph) and (width < page_width and best is None):
-            box = paragraph[stop] 
-            if box.get_hint('break'):
-                pen = calc(stop+1)[1] + penalty(page_width, width)
-                if best and pen < best[1]:
-                    best = stop+1, pen
-            width += box.width
-            stop += 1
-        if best is None:
-            best = len(paragraph), float('inf')
-        memoized[start] = best
-        return best
-    index = 0
-    while index < len(paragraph):
-        jndex = calc(index)[0]
-        yield hpack(paragraph[index:jndex])
-        index = jndex
+    memo = []
+    def penalty_of(index):
+        return memo[length - index][0]
 
-def penalty(page_width, width):
-    #width = sum(box.width for box in line)
-    if width <= page_width:
-        return (page_width - width) ** 2
-    return float('inf')
+    def penalty(cut, width):
+        # Adjustment to not penalize final line
+        if cut == length and width*10 > page_width:
+            return 0
+        p = penalty_of(cut)
+        if width <= page_width:
+            return p + (page_width - width) ** 2
+        return 2**10
+
+    def cut_points(start):
+        cut = start + 1
+        width = paragraph[start].width
+        none_yet = True
+        while cut < length and (none_yet or width <= page_width):
+            if paragraph[cut].get_hint('break'):
+                yield width, cut
+                none_yet = False
+            width += paragraph[cut].width
+            cut += 1
+        if cut == length:
+            yield width, cut
+
+    def compute(start):
+        if start == length:
+            return (0, length)
+        return min(
+            (penalty(cut, width), cut)
+            for width, cut in cut_points(start))
+
+    index = length
+    while index >= 0:
+        memo.append(compute(index))
+        index -= 1
+
+    start = 0
+    while start < length:
+        cut = memo[length - start][1]
+        yield line_justify(env, paragraph[start:cut], cut==length)
+        start = cut+1
+
+def line_justify(env, line, is_last_line):
+    if is_last_line:
+        return hpack(line)
+    return hpack(line, to_dimen=env.page_width)
 
 # paragraph break fold
 def par(env):
