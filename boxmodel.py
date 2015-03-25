@@ -168,10 +168,13 @@ def apply_dimen(to_dimen, size, shrink, stretch):
     return x, to_dimen
 
 def set_dimen(glue, expand):
+    glue.computed = glue.width
     if expand.real > 0:
-        glue.computed = glue.width + expand.real * glue.shrink.real
+        if glue.stretch.imag == expand.imag:
+            glue.computed = glue.width + expand.real * glue.stretch.real
     else:
-        glue.computed = glue.width + expand.real * glue.stretch.real
+        if glue.shrink.imag == expand.imag:
+            glue.computed = glue.width + expand.real * glue.shrink.real
     return glue.computed
 
 def pick_nearest(box, x, y):

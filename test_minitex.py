@@ -51,12 +51,42 @@ def paint(t):
     compositor.compose(box, 10, box.height + 10)
     compositor.render(0, 0, width, height)
 
+def rjust(cell):
+    return scope([hfil, cell])
+
 def page():
     return [
+        scope([
+            "OpenGL rendered by test_minitex.py [~100 lines] in: ",
+            "http://github.com/cheery/textended-edit/",
+        ], font_size=8),
+        par,
         "Hi there, We have not been properly introduced, but I already know your name. You're the ",
         scope(["AMAZING Spiderman"], font_size=20), ". I am pleased to meet you!",
         par,
-        scope(["- Bonzi"], font_size=10, color=(0.4, 0, 0, 1))
+        scope(["- Bonzi (Buddy) Savage"], font_size=10, color=(0.4, 0, 0, 1)),
+        par,
+        "Serious matrices: ",
+        table([
+            map(rjust, ["1.0,", " 15.0,", " 0.0"]),
+            map(rjust, ["0.0,", " 1.0,", " 0.0"]),
+            map(rjust, ["0.0,", " 0.0,", " 1.0"]),
+            map(rjust, ["23.0,", " 44.0,", " -5.0"]),
+        ]),
+        " and.. ",
+        table([
+            map(rjust, ["1.0,", " 15.0,", " 0.0"]),
+            map(rjust, ["0.0,", " 1.0,", " 0.0"]),
+            map(rjust, ["0.0,", " 0.0,", " 1.0"]),
+        ]),
+        par,
+        vbox([
+            scope([par, par, "Why? What?"], font_size=20), par,
+            "I need to display some structures in my editor. "
+            "But I needed configurable layout. "
+            "I designed combinators that imitate at "
+            "a famous typesetting system TeX. "
+        ], font_size=11, page_width=400, text_align=line_left)
     ]
 
 if __name__=='__main__':

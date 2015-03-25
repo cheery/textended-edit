@@ -159,7 +159,7 @@ def line_break(paragraph, env):
     start = 0
     while start < length:
         cut = memo[length - start][1]
-        yield line_justify(env, paragraph[start:cut], cut==length)
+        yield env.text_align(env, paragraph[start:cut], cut==length)
         start = cut+1
 
 def line_justify(env, line, is_last_line):
@@ -167,8 +167,36 @@ def line_justify(env, line, is_last_line):
         return hpack(line)
     return hpack(line, to_dimen=env.page_width)
 
+def line_left(env, line, is_last_line):
+    return hpack(line)
+
 # paragraph break fold
 def par(env):
     box = Glue(env.font_size)
     box.hint = {'vertical': True}
     yield box
+
+def hfil(env):
+    yield Glue(1, 0, 1+1j)
+
+import math, time
+# Table layouting
+def table(rows, **values):
+    def table_fold(env):
+        env = Environ.let(env, values)
+        tab = [[list(fold(cell, env)) for cell in row] for row in rows]
+        col = [0 for i in range(max(map(len, tab)))]
+        for row in tab:
+            for i, cell in enumerate(row):
+                col[i] = max(col[i], sum(x.width for x in cell))
+        box = vpack([
+            hpack([hpack(cell, to_dimen=w) for w, cell in zip(col, row)])
+            for row in tab])
+        if len(box) > 0:
+            y = box[len(box)/2].offset
+            if len(box)%2 == 0:
+                y = (y + box[len(box)/2-1].offset) * 0.5
+            box.height += y
+            box.depth -= y
+        yield box
+    return table_fold
