@@ -1,66 +1,89 @@
 import ast
 
-def translate_return(env, expr):
-    yield env.new_node(ast.Return, expr)
+def translate_call(env, func, argv):
+    stmts = list(func.stmts)
+    args = []
+    for arg in argv:
+        stmts.extend(arg.stmts)
+        args.append(arg.expr)
+    return Box(env.new_node(ast.Call, func.expr, args, [], None, None), stmts)
 
-def translate_assign(env, lhs, rhs):
-    yield env.new_node(ast.Assign, [lhs], rhs)
+# Could use for vargs later..
+def translate_argument_expr(env, expr):
+    return expr
+# #     args = []
+# #     varg = None
+# #     for style, expr in argv:
+# #         if style == 'arg':
+# #             args.append(expr)
+# #         elif style == 'vararg':
+# #             varg = expr
+# #         else:
+# #             assert False, "should not happen"
+# #     return env.new_node(ast.Call, func, args, [], varg, None)
+# 
+#     print subj, args
+# 
+#     assert False
+
+def translate_stmt_expr(env, ebox):
+    return Box(env.new_node(ast.Expr, ebox.expr), ebox.stmts)
+
+def translate_expr_symbol(env, name):
+    if name == '':
+        return Box(env.none())
+    if name[:1].isdigit():
+        if '.' in name:
+            return Box(env.new_node(ast.Num, float(name)))
+        return Box(env.new_node(ast.Num, int(name)))
+    return Box(env.new_node(ast.Name, as_python_sym(name), ast.Load()))
+
+def translate_lxpr_symbol(env, name):
+    return Box(env.new_node(ast.Name, as_python_sym(name), ast.Store()))
+ 
+def translate_expr_string(env, string):
+    return Box(env.new_node(ast.Str, string))
+
+def translate_return(env, ebox):
+    return Box(env.new_node(ast.Return, ebox.expr), ebox.stmts)
 
 def translate_import(env, *aliases):
-    yield env.new_node(ast.Import, list(aliases))
+    return Box(env.new_node(ast.Import, list(aliases)))
 
-def translate_from_import(env, name, aliases):
-    yield env.new_node(ast.ImportFrom, as_python_sym(name), aliases, 0)
+def translate_as(env, name, alias):
+    return env.new_node(ast.alias, as_python_sym(name), as_python_sym(alias))
 
 def translate_alias_symbol(env, name):
     return env.new_node(ast.alias, as_python_sym(name), None)
 
-def translate_print(env, *exprs):
-    yield env.new_node(ast.Print, None, list(exprs), True)
+def translate_let(env, lbox, ebox):
+    stmts = list(ebox.stmts) + list(lbox.stmts)
+    stmts.append(env.new_node(ast.Assign, [lbox.expr], ebox.expr))
+    # This is wrong return value for let, but I will fix it later.
+    return Box(env.none(), stmts)
 
-def translate_global(env, *globs):
-    yield env.new_node(ast.Global, [as_python_sym(sym) for sym in globs])
+def translate_function(env, args, body):
+    name = env.new_sym()
+    body = []
+    for expr in body:
+        body.extend(env.statementify(expr))
+    body.append(env.new_node(ast.Return, env.none()))
+    return Box(
+        env.new_node(ast.Name, name, ast.Load()),
+        [env.new_node(ast.FunctionDef,
+            name,
+            ast.arguments([
+                env.new_node(ast.Name, as_python_sym(a), ast.Param())
+                for a in args], None, None, []),
+            body,
+            [])])
 
-def translate_expr_binary(env, string):
-    return env.new_node(ast.Str, string)
-
-def translate_expr_string(env, string):
-    return env.new_node(ast.Str, string)
-
-def translate_expr_blank(env, name):
-    return translate_expr_symbol(env, name)
-
-def translate_expr_symbol(env, name):
-    if name[:1].isdigit():
-        if '.' in name:
-            return env.new_node(ast.Num, float(name))
-        return env.new_node(ast.Num, int(name))
-    return env.new_node(ast.Name, as_python_sym(name), ast.Load())
-
-def translate_expr_store_symbol(env, name):
-    return env.new_node(ast.Name, as_python_sym(name), ast.Store())
-
-def translate_stmt_expr(env, expr):
-    yield env.new_node(ast.Expr, expr)
+#def translate_from_import(env, name, aliases):
+#    yield env.new_node(ast.ImportFrom, as_python_sym(name), aliases, 0)
 
 def as_python_sym(name):
     return name.encode('utf-8')
 
-# import dom, sys, os, ast, imp
-# import traceback
-# from collections import defaultdict
-# from recognizer import Group, Binary, String, Symbol, Context
-# 
-# @semantic(stmt, Group('define', [Symbol(), Group('', [], Symbol())],stmt))
-# def def_statement(env, name, arglist, statements):
-#     return env.new_node(ast.FunctionDef,
-#         as_python_sym(name),
-#         ast.arguments([
-#             env.new_node(ast.Name, as_python_sym(a), ast.Param(), lineno=0, col_offset=0)
-#             for a in arglist[0]], None, None, []),
-#         statements, 
-#         [])
-# 
 # @semantic(stmt, Group('if', [expr], stmt))
 # def def_statement(env, cond, body):
 #     return env.new_node(ast.If, cond, body, [])
@@ -72,14 +95,6 @@ def as_python_sym(name):
 # @semantic(expr, Group('attr', [expr, Symbol()]))
 # def attr_expression(env, subj, name):
 #     return env.new_node(ast.Attribute, subj, as_python_sym(name), ast.Load())
-# 
-# @semantic(argument, Context('expr'))
-# def expr_as_argument(env, expr):
-#     return ('arg', expr)
-# 
-# @semantic(argument, Group('vararg', [expr]))
-# def varg_argument(env, expr):
-#     return ('vararg', expr)
 # 
 # @semantic(expr, Group('cmp', [expr, Symbol(), expr]))
 # def cmp_expr(env, lhs, op, rhs):
@@ -306,3 +321,8 @@ def as_python_sym(name):
 #             ]))
 #             document = dom.Document(dom.Literal(u'', errors))
 #             dom.dump(sys.stderr, document)
+
+class Box(object):
+    def __init__(self, expr, stmts=()):
+        self.expr = expr
+        self.stmts = stmts

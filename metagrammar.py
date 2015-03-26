@@ -43,6 +43,8 @@ def load(forest):
     for cell in forest:
         if modeline.validate(cell):
             continue
+        if cell.symbol and cell.is_blank():
+            continue
         builder.build_context(grammar.toplevel, cell)
     assert builder.toplevel is not None, "proper grammar must define a toplevel"
     return Grammar(builder.toplevel, builder.rules, builder.contexes)
@@ -104,7 +106,6 @@ class Builder(object):
         return cell[:]
 
     def build_group(self, sequence, cell):
-        print sequence, cell
         return [r(self, c) for r, c in zip(sequence, cell)]
 
     def build_star(self, star, cell):
