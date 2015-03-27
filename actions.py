@@ -1,5 +1,5 @@
 from dom import Cell, TextCell, ListCell
-from grammar import modeline, turnip, Star, Plus, Context
+from grammar import turnip, Star, Plus, Context
 from position import Position
 import sys
 import traceback
@@ -16,13 +16,11 @@ def interpret(visual, keyboard):
             if key == 'escape':
                 sys.exit(0)
             elif key == 'f2':
-                body = visual.head.cell.document.body
-                if len(body) > 0 and modeline.validate(body[0]):
-                    visual.setpos(Position.bottom(body[0]))
-                else:
-                    blank = modeline.blank()
-                    body.put(0, [blank])
-                    visual.setpos(Position.bottom(blank))
+                ws = visual.document.workspace
+                index = ws.available_grammars.index(ws.current_grammar.name)
+                name = ws.available_grammars[(index+1)%len(ws.available_grammars)]
+                print 'switching to', name
+                ws.current_grammar = ws.get_grammar(name)
             elif key == 'f4':
                 for cell in visual.head.cell.hierarchy:
                     print cell,
@@ -140,7 +138,7 @@ def start_completion(visual):
             result.append(rule)
     result.sort(key=lambda rule: rule.label)
     for rule in result:
-        block = rule.blank()
+        block = rule.blank(head.cell.grammar.name)
         replace(head.cell, block)
         visual.setpos(Position.top(block))
         yield None
@@ -170,7 +168,7 @@ def start_expansion(visual):
     # slightly incorrect, should find the position where expansion is allowable.
     above = visual.head.above
     forest = above.cell.drop(above.index, above.index+1)
-    expansion = ListCell(u"@", forest)
+    expansion = ListCell(forest, u"@", u"")
     above.cell.put(above.index, [expansion])
     visual.setpos(Position(forest[0], visual.head.index))
 
@@ -209,7 +207,7 @@ def collapse(head, tail):
         else:
             stop = common.index(right) + 1
 
-        cell = common.wrap(start, stop, ListCell('@', []))
+        cell = common.wrap(start, stop, ListCell([], u"@", u""))
         if left.parent != cell:
             left.parent.unwrap()
         if right.parent != cell:
@@ -227,6 +225,8 @@ def collapse(head, tail):
         common = break_to_boundary(common, bound)
         rule = common.rule
     if cell is not common and isinstance(rule, (Plus,Star)) and all(rule.rule.match(c)[1] is not None for c in cell):
+        cell.unwrap()
+    elif cell.parent and cell.parent.parent is None:
         cell.unwrap()
     return Position(blank, 0), dropped
 
@@ -368,7 +368,7 @@ def put(position, data):
         elif position.cell == bound:
             index = parent.index(position.cell)
             parent.drop(index, index+1)
-            parent.put(index, [ListCell('@', data)])
+            parent.put(index, [ListCell(data, u"@", "")])
         else:
             break_to_boundary(position.cell, bound)
             index = parent.index(position.cell)
@@ -419,7 +419,7 @@ def break_to_boundary(cell, bound):
         cell, start, stop = cell.unwrap()
     postorder_trim(cell)
     parent, start, stop = cell.unwrap()
-    return parent.wrap(start, stop, ListCell('@', []))
+    return parent.wrap(start, stop, ListCell([], u"@", u""))
 
 def collapse_range(cell, start, stop):
     "Collapses within a cell, if the cell no longer validates, it is broken"

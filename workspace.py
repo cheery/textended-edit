@@ -8,6 +8,11 @@ class Workspace(object):
         self.documents = {}
         self.grammars = {}
         self.clipboard = ""
+        self.available_grammars = ['grammar'] + [
+            g[:-3] for g in os.listdir('grammars') if g.endswith('.t+')]
+        self.available_grammars.sort()
+        self.current_grammar = self.get_grammar('grammar')
+
 #        self.unbound = []
 #        self.schema_cache = {}
 #
@@ -27,36 +32,38 @@ class Workspace(object):
         if path in self.documents:
             return self.documents[path]
         elif os.path.isfile(path):
-            document = dom.Document(dom.ListCell("", dom.load(path)), self)
+            document = dom.Document(dom.ListCell(dom.load(path), "", ""), self)
             self.documents[path] = document
             return document
         elif not os.path.isdir(os.path.dirname(path)) and os.path.dirname(path) <> "":
             raise Exception("Not a directory: {}".format(os.path.dirname(path)))
         elif create:
-            document = dom.Document(dom.ListCell("", []), self)
+            document = dom.Document(dom.ListCell([], u"", u""), self)
             self.documents[path] = document
             return document
         else:
             raise Exception("No such file: {}".format(path))
 
     def get_grammar(self, name):
+        if name == '@':
+            return self.current_grammar
         if name == 'grammar':
             return metagrammar.grammar
         path = os.path.join('grammars', name + '.t+')
         if os.path.isfile(path):
             if path not in self.grammars:
-                self.grammars[path] = metagrammar.load(dom.load(path))
+                self.grammars[path] = metagrammar.load(dom.load(path), name)
             return self.grammars[path]
         return metagrammar.blank
 
     def grammar_of(self, cell):
-        while cell.parent is not None:
+        while cell is not None:
+            if cell.label == '@':
+                return self.current_grammar
+            if len(cell.label) > 0:
+                return self.get_grammar(cell.grammar_name)
             cell = cell.parent
-            if modeblock.validate(cell):
-                return self.get_grammar(cell[0][0][:])
-        if len(cell) > 0 and modeline.validate(cell[0]):
-            return self.get_grammar(cell[0][0][:])
-        return metagrammar.blank
+        return self.current_grammar
 
     def write(self, document):
         for path, item in self.documents.items():

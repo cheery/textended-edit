@@ -189,10 +189,11 @@ class TextCell(Cell):
         return self.contents[start:stop]
 
 class ListCell(Cell):
-    def __init__(self, label, contents, ident=""):
+    def __init__(self, contents, label, grammar_name, ident=""):
+        self.contents = []
+        self.grammar_name = grammar_name
         self.ident = ident
         self.label = label
-        self.contents = []
         for cell in contents:
             assert isinstance(cell, Cell)
             assert cell.parent is None
@@ -284,22 +285,31 @@ class ListCell(Cell):
         return cell
 
 def transform_enc(cell):
-    "warning: document format will change if the new document model turns out to be sufficient."
     assert isinstance(cell, Cell), "{} not a cell".format(cell)
     if cell.symbol:
-        return (cell.contents, None, cell.ident)
+        return textended.common.SYMBOL, cell.ident, cell.contents
     elif isinstance(cell, TextCell):
-        return ("", cell.contents, cell.ident)
+        return textended.common.STRING, cell.ident, cell.contents
+    elif len(cell.label) == 0:
+        return textended.common.LIST, cell.ident, cell.contents
     else:
-        return (cell.label, cell.contents, cell.ident)
+        contents = cell.contents, cell.label, cell.grammar_name
+        return textended.common.STRUCT, cell.ident, contents
 
-def transform_dec(label, contents, ident):
-    if contents is None:
-        return TextCell(label, ident, symbol=True)
-    elif isinstance(contents, list):
-        return ListCell(label, contents, ident)
-    else:
+def transform_dec(tag, ident, contents):
+    if tag == textended.common.SYMBOL:
+        return TextCell(contents, ident, symbol=True)
+    elif tag == textended.common.STRING:
         return TextCell(contents, ident, symbol=False)
+    elif tag == textended.common.BINARY: # for opening old files with binary.
+        return TextCell(contents, ident, symbol=False)
+    elif tag == textended.common.LIST:
+        return ListCell(contents, "", "", ident)
+    elif tag == textended.common.STRUCT:
+        contents, label, grammar = contents
+        return ListCell(contents, label, grammar, ident)
+    else:
+        assert False
 
 def dump(fd, forest):
     textended.dump(forest, fd, transform_enc)

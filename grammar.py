@@ -1,7 +1,8 @@
 from dom import Cell, TextCell, ListCell
 
 class Grammar(object):
-    def __init__(self, toplevel, rules, contexes):
+    def __init__(self, toplevel, rules, contexes, name):
+        self.name = name
         self.contexes = contexes
         self.toplevel = toplevel
         self.rules = rules
@@ -17,10 +18,6 @@ class Grammar(object):
         Validation of every node is shallow.
         The construct should be recognized even if it were in a wrong context.
         """
-        if modeline.validate(cell):
-            return modeline
-        if modeblock.validate(cell):
-            return modeblock
         if turnip.validate(cell):
             return turnip
         if len(cell.label) > 0 and cell.label in self.rules:
@@ -70,8 +67,8 @@ class Group(ListRule):
     def at(self, index):
         return self[index]
 
-    def blank(self):
-        return ListCell(self.label, [r.blank() for r in self])
+    def blank(self, grammar):
+        return ListCell([r.blank(grammar) for r in self], self.label, grammar)
 
     def validate(self, cell):
         if not isinstance(cell, ListCell):
@@ -94,8 +91,8 @@ class Star(ListRule):
     def at(self, index):
         return self.rule
 
-    def blank(self):
-        return ListCell(self.label, [])
+    def blank(self, grammar):
+        return ListCell([], self.label, grammar)
 
     def validate(self, cell):
         if not isinstance(cell, ListCell):
@@ -118,8 +115,8 @@ class Plus(ListRule):
     def at(self, index):
         return self.rule
 
-    def blank(self):
-        return ListCell(self.label, [TextCell(u"")])
+    def blank(self, grammar):
+        return ListCell([TextCell(u"")], self.label, grammar)
 
     def validate(self, cell):
         if not isinstance(cell, ListCell):
@@ -143,7 +140,7 @@ class Context(Rule):
     def __repr__(self):
         return "<{}>".format(self.name)
 
-    def blank(self):
+    def blank(self, grammar):
         return TextCell(u"")
 
     def match(self, cell):
@@ -183,7 +180,7 @@ class Symbol(Rule):
     def __repr__(self):
         return 'symbol'
 
-    def blank(self):
+    def blank(self, grammar):
         return TextCell(u"")
 
     def validate(self, cell):
@@ -201,7 +198,7 @@ class Keyword(Rule):
     def __repr__(self):
         return '<keyword {!r}>'.format(self.keyword)
 
-    def blank(self):
+    def blank(self, grammar):
         return TextCell(keyword)
 
     def validate(self, cell):
@@ -217,7 +214,7 @@ class String(Rule):
     def __repr__(self):
         return 'string'
 
-    def blank(self):
+    def blank(self, grammar):
         return TextCell(u"", symbol=False)
 
     def validate(self, cell):
@@ -226,6 +223,4 @@ class String(Rule):
 symbol = Symbol()
 string = String()
 anything = Context(None)
-modeline = Plus(symbol, label='##')
-modeblock = Group([Plus(symbol), Star(anything)], label='#')
 turnip = Plus(anything, label='@')

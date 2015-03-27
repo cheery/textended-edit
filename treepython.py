@@ -12,7 +12,7 @@ import treepython_translator
 #import imp
 #import os
 
-grammar = metagrammar.load(dom.load("grammars/treepython.t+"))
+grammar = metagrammar.load(dom.load("grammars/treepython.t+"), 'treepython')
 
 def file_to_ast(path):
     return forest_to_ast(dom.load(path))

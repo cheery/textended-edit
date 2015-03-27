@@ -33,21 +33,19 @@ def new_metagrammar():
         'rule': group(stmt, [symbol, Star(symbol), expr]),
         'star': group(expr, [expr]),
         'toplevel': group(stmt, [symbol]),
-        }, contexes)
+        }, contexes, "grammar")
 
-blank = Grammar(anything, {}, {})
+blank = Grammar(anything, {}, {}, "")
 grammar = new_metagrammar()
 
-def load(forest):
+def load(forest, name):
     builder = Builder()
     for cell in forest:
-        if modeline.validate(cell):
-            continue
         if cell.symbol and cell.is_blank():
             continue
         builder.build_context(grammar.toplevel, cell)
     assert builder.toplevel is not None, "proper grammar must define a toplevel"
-    return Grammar(builder.toplevel, builder.rules, builder.contexes)
+    return Grammar(builder.toplevel, builder.rules, builder.contexes, name)
 
 class Builder(object):
     def __init__(self):

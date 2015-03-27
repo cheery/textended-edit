@@ -9,7 +9,8 @@ from time import time
 # succeed, giving an insanely bad initial answer.
 
 class Reduction(object): # Reduction represents found ListRules.
-    def __init__(self, rule, values, badness):
+    def __init__(self, grammar, rule, values, badness):
+        self.grammar = grammar
         self.rule = rule
         self.values = values
         self.badness = 50 # Would fill up from the operator-assigned badness.
@@ -44,7 +45,7 @@ class Reduction(object): # Reduction represents found ListRules.
                 result.append(item.wrap())
             else:
                 result.append(item.copy())
-        return ListCell(self.rule.label, result)
+        return ListCell(result, self.rule.label, self.grammar.name)
 
 # Parsing results with incorrect precedences aren't suppressed, instead they're
 # penalized harshly.
