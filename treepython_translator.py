@@ -64,10 +64,11 @@ def translate_let(env, lbox, ebox):
 
 def translate_function(env, args, body):
     name = env.new_sym()
-    body = []
+    stmts = []
     for expr in body:
-        body.extend(env.statementify(expr))
-    body.append(env.new_node(ast.Return, env.none()))
+        stmts.extend(env.statementify(expr))
+    stmts.append(env.new_node(ast.Return, env.none()))
+    print stmts
     return Box(
         env.new_node(ast.Name, name, ast.Load()),
         [env.new_node(ast.FunctionDef,
@@ -75,7 +76,7 @@ def translate_function(env, args, body):
             ast.arguments([
                 env.new_node(ast.Name, as_python_sym(a), ast.Param())
                 for a in args], None, None, []),
-            body,
+            stmts,
             [])])
 
 #def translate_from_import(env, name, aliases):
@@ -219,64 +220,6 @@ def as_python_sym(name):
 # 
 #     def __str__(self):
 #         return "{}".format(self.name)
-# 
-# def import_file_to_module(module_name, path):
-#     try:
-#         ast = file_as_ast(path)
-#         mod = imp.new_module(module_name)
-#         mod.__file__ = path
-#         eval(ast_compile(ast, path, "exec"), mod.__dict__)
-#     except Exception:
-#         sys.modules.pop(module_name, None)
-#         raise
-#     return mod
-# 
-# def ast_compile(ast, filename, mode):
-#     return compile(ast, filename, mode)
-# 
-# class MetaLoader(object):
-#     def __init__(self, path, ispkg):
-#         self.path = path
-#         self.ispkg = ispkg
-# 
-#     def load_module(self, fullname):
-#         if fullname in sys.modules:
-#             return sys.modules[fullname]
-# 
-#         sys.modules[fullname] = None
-#         mod = import_file_to_module(fullname, self.path)
-# 
-#         mod.__file__ = self.path
-#         mod.__loader__ = self
-#         mod.__name__ = fullname
-# 
-#         if self.ispkg:
-#             mod.__path__ = []
-#             mod.__package__ = fullname
-#         else:
-#             mod.__package__ = fullname.rpartition('.')[0]
-# 
-#         sys.modules[fullname] = mod
-#         return mod
-# 
-# class MetaImporter(object):
-#     def find_on_path(self, fullname):
-#         files = [("{}/{}/__init__.t+", True), ("{}/{}.t+", False)]
-#         dirpath = "/".join(fullname.split("."))
-#         for path in sys.path:
-#             path = os.path.abspath(path)
-#             for fp, ispkg in files:
-#                 fullpath = fp.format(path, dirpath)
-#                 if os.path.exists(fullpath):
-#                     return fullpath, ispkg
-#         return None, None
-# 
-#     def find_module(self, fullname, path=None):
-#         path, ispkg = self.find_on_path(fullname)
-#         if path:
-#             return MetaLoader(path, ispkg)
-# 
-# sys.meta_path.insert(0, MetaImporter())
 # 
 # if __name__=='__main__':
 #     try:

@@ -4,13 +4,11 @@ from grammar import symbol, string
 from itertools import count
 import ast
 import dom
+import imp
 import metagrammar
+import os
 import sys
 import treepython_translator
-
-#import ast
-#import imp
-#import os
 
 grammar = metagrammar.load(dom.load("grammars/treepython.t+"), 'treepython')
 
@@ -27,6 +25,17 @@ def forest_to_ast(forest):
         body.extend(env.statementify(result))
     return ast.Module(body)
 
+def import_file_to_module(module_name, path):
+    try:
+        ast = file_to_ast(path)
+        mod = imp.new_module(module_name)
+        mod.__file__ = path
+        mod.__dict__.update(default_env)
+        eval(compile(ast, path, "exec"), mod.__dict__)
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
+    return mod
 
 class Env(object):
     def __init__(self):
@@ -106,6 +115,47 @@ class Env(object):
     def none(self):
         return self.new_node(ast.Name, "None", ast.Load(), lineno=0, col_offset=0)
 
+class MetaLoader(object):
+    def __init__(self, path, ispkg):
+        self.path = path
+        self.ispkg = ispkg
+
+    def load_module(self, fullname):
+        if fullname in sys.modules:
+            return sys.modules[fullname]
+
+        sys.modules[fullname] = None
+        mod = import_file_to_module(fullname, self.path)
+
+        mod.__file__ = self.path
+        mod.__loader__ = self
+        mod.__name__ = fullname
+
+        if self.ispkg:
+            mod.__path__ = []
+            mod.__package__ = fullname
+        else:
+            mod.__package__ = fullname.rpartition('.')[0]
+
+        sys.modules[fullname] = mod
+        return mod
+
+class MetaImporter(object):
+    def find_on_path(self, fullname):
+        files = [("{}/{}/__init__.t+", True), ("{}/{}.t+", False)]
+        dirpath = "/".join(fullname.split("."))
+        for path in sys.path:
+            path = os.path.abspath(path)
+            for fp, ispkg in files:
+                fullpath = fp.format(path, dirpath)
+                if os.path.exists(fullpath):
+                    return fullpath, ispkg
+        return None, None
+
+    def find_module(self, fullname, path=None):
+        path, ispkg = self.find_on_path(fullname)
+        if path:
+            return MetaLoader(path, ispkg)
 
 def get_translator(name):
     return getattr(treepython_translator, "translate_" + name.replace('-', '_'))
@@ -124,12 +174,17 @@ def lineno_to_ident(lineno):
         lineno >>= 8
     return ident
 
+sys.meta_path.append(MetaImporter())
+
 def println(*args):
     print ' '.join(map(str, args))
 
+default_env = {
+    'println': println
+}
+
 if __name__=='__main__':
-    local_environ = dict(
-        println = println)
+    local_environ = default_env.copy()
     path = sys.argv[1]
     code = forest_to_ast(dom.load(path))
     exec compile(code, path, 'exec') in local_environ
