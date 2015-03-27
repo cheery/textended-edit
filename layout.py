@@ -1,39 +1,88 @@
 from boxmodel import *
 from dom import TextCell, ListCell
+from minitex import *
 #from schema import Rule, Star, ListRule, modeline, modechange, blankschema, has_modeline
 #import dom
 #import importlib
 #
 def page(document, options):
+    env = Environ.root(options)
+    box = toplevel(layout_document(document), env, dict(page_width=300, indent=40))#dict(page_width=width-20, line_break=line_break))
+    return box, []
+
+def layout_document(document):
     lines = []
     for cell in document.body:
-        lines.append(layout_cell(cell, options))
+        lines.append(layout_cell(cell))
+        lines.append(brk)
     if document.body.is_external():
-        lines.append(hpack(plain("._.", options, 'color_empty')).set_subj(document.body, 0))
-    return vpack(lines), []
+        lines.append(external_marker(document.body))
+    return lines
+                
+def external_marker(cell):
+    def _fold(env):
+        yield hpack(env.font("._.", env.font_size, color=env.color_empty)).set_subj(cell, 0)
+    return _fold
 
-def layout_cell(cell, options):
+def blank_marker(cell):
+    def _fold(env):
+        yield hpack(env.font("_", env.font_size, color=env.color_empty)).set_subj(cell, 0)
+    return _fold
+
+def string_wrap(cell):
+    def _fold(env):
+        pre = env.font('"', env.font_size, color=env.color_string)
+        pos = env.font('"', env.font_size, color=env.color_string)
+        return pre + env.font(cell, env.font_size, color=env.color_string) + pos
+    return _fold
+
+def notation(text):
+    def _fold(env):
+        yield hpack(env.font(text, env.font_size, color=env.color_notation))
+    return _fold
+
+def layout_cell(cell):
     if isinstance(cell, TextCell):
         if cell.is_blank() and cell.symbol:
-            return hpack(plain("_", options, 'color_empty')).set_subj(cell, 0)
+            return blank_marker(cell)
         if cell.symbol:
-            return hpack(plain(cell, options))
-        pre = plain('"', options, 'color_string')
-        post = plain('"', options, 'color_string')
-        return hpack(pre + plain(cell, options, 'color_string') + post)
+            return cell
+        return string_wrap(cell)
     if cell.is_external():
-        return hpack(plain("._.", options, 'color_empty')).set_subj(cell, 0)
-    boxes = []
-    boxes.extend(plain("[", options, 'color_notation'))
-    boxes.extend(plain(cell.label, options, 'color_notation' if cell.rule else 'color_notation_error'))
+        return external_marker(cell)
+    row = []
+    row.append(notation("["))
+    spac = False
+    if len(cell.label) > 0:
+        row.append(notation(cell.label))
+        spac = True
     for subcell in cell:
-        boxes.extend(plain(" ", options, 'color_notation'))
-        boxes.append(layout_cell(subcell, options))
-    boxes.extend(plain("]", options, 'color_notation'))
-    return hpack(boxes)
+        if spac:
+            row.append(" ")
+        row.append(layout_cell(subcell))
+        spac = True
+    row.append(notation("]"))
+    return scope(row)
+#def layout_cell(cell, options):
+#    if isinstance(cell, TextCell):
+#        if cell.is_blank() and cell.symbol:
+#            return hpack(plain("_", options, 'color_empty')).set_subj(cell, 0)
+#        if cell.symbol:
+#            return hpack(plain(cell, options))
+#    if cell.is_external():
+#        return hpack(plain("._.", options, 'color_empty')).set_subj(cell, 0)
+#    boxes = []
+#    boxes.extend(plain("[", options, 'color_notation'))
+#    boxes.extend(plain(cell.label, options, 'color_notation' if cell.rule else 'color_notation_error'))
+#    for subcell in cell:
+#        boxes.extend(plain(" ", options, 'color_notation'))
+#        boxes.append(layout_cell(subcell, options))
+#    boxes.extend(plain("]", options, 'color_notation'))
+#    return hpack(boxes)
+#
+#def plain(cell, options, color='white'):
+#    return options['font'](cell, options['font_size'], color=options[color])
 
-def plain(cell, options, color='white'):
-    return options['font'](cell, options['font_size'], color=options[color])
 
 #def page(workspace, env, subj):
 #    context = Object(workspace=workspace, env=env, outboxes=[], schema=blankschema, layout=None)

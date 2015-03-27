@@ -20,12 +20,14 @@ class Environ(object):
         return parent
 
     @classmethod
-    def root(cls, **values):
+    def root(cls, values={}):
         env = cls(None, values)
         if 'line_break' not in values:
             env.values['line_break'] = line_break_greedy
         if 'text_align' not in values:
             env.values['text_align'] = line_justify
+        if 'indent' not in values:
+            env.values['indent'] = 0
         return env
 
 def fold(item, env):
@@ -36,12 +38,12 @@ def fold(item, env):
     else:
         return env.font(item, env.font_size, color=env.color)
 
-def toplevel(contents, env, **values):
+def toplevel(contents, env, values={}):
     env = Environ.let(env, values)
     return vpack(list(vbox(contents)(env)))
 
 # These 'folding' -combinators take input and return a closure constructing boxes for environ.
-def scope(contents, **values):
+def scope(contents, values={}):
     def scope_fold(env):
         env = Environ.let(env, values)
         for item in contents:
@@ -50,7 +52,7 @@ def scope(contents, **values):
     return scope_fold
 
 # imitates restricted horizontal mode
-def hbox(contents, **values):
+def hbox(contents, values={}):
     def hbox_fold(env):
         env = Environ.let(env, values)
         boxes = []
@@ -60,7 +62,7 @@ def hbox(contents, **values):
     return hbox_fold
 
 # imitates both vertical modes
-def vbox(contents, **values):
+def vbox(contents, values={}):
     def vbox_fold(env):
         env = Environ.let(env, values)
         boxes = []
@@ -83,36 +85,48 @@ def no_line_break(paragraph, env):
     yield hpack(paragraph)
 
 def line_break_greedy(paragraph, env):
+    indent = 0
     line = []
     remaining = env.page_width
     breakpoint = 0
     for box in paragraph:
         if remaining < box.width and breakpoint > 0:
-            yield hpack(line[:breakpoint-1])
+            lineseg = hpack(line[:breakpoint-1])
+            lineseg.shift = indent
+            yield lineseg
             line = line[breakpoint:]
             breakpoint = 0
-            remaining = env.page_width - sum(box.width for box in line)
+            indent = env.indent
+            remaining = env.page_width - sum(box.width for box in line) - indent
         line.append(box)
         remaining -= box.width
         if box.get_hint('break'):
             breakpoint = len(line)
-    yield hpack(line)
+    lineseg = hpack(line)
+    lineseg.shift = indent
+    yield lineseg
 
 def line_break_greedy_justify(paragraph, env):
+    indent = 0
     line = []
-    remaining = env.page_width
+    remaining = env.page_width - indent
     breakpoint = 0
     for box in paragraph:
         if remaining < box.width and breakpoint > 0:
-            yield hpack(line[:breakpoint-1], to_dimen=env.page_width)
+            lineseg = hpack(line[:breakpoint-1], to_dimen=env.page_width)
+            lineseg.shift = indent
+            yield lineseg
             line = line[breakpoint:]
             breakpoint = 0
-            remaining = env.page_width - sum(box.width for box in line)
+            indent = env.indent
+            remaining = env.page_width - sum(box.width for box in line) - indent
         line.append(box)
         remaining -= box.width
         if box.get_hint('break'):
             breakpoint = len(line)
-    yield hpack(line)
+    lineseg = hpack(line)
+    lineseg.shift = indent
+    yield lineseg
 
 # Somewhat less clumsy implementation of minimum raggedness algorithm.
 def line_break(paragraph, env):
@@ -176,12 +190,17 @@ def par(env):
     box.hint = {'vertical': True}
     yield box
 
+def brk(env):
+    box = Glue(0)
+    box.hint = {'vertical': True}
+    yield box
+
 def hfil(env):
     yield Glue(1, 0, 1+1j)
 
 import math, time
 # Table layouting
-def table(rows, **values):
+def table(rows, values={}):
     def table_fold(env):
         env = Environ.let(env, values)
         tab = [[list(fold(cell, env)) for cell in row] for row in rows]

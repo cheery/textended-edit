@@ -20,10 +20,10 @@ def main(respond):
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     compositor = Compositor(images)
-    env = Environ.root(
+    env = Environ.root(dict(
         font=font.load("OpenSans.fnt"),
         font_size=16,
-        color=(0, 0, 0, 1.0))
+        color=(0, 0, 0, 1.0)))
     keyboard = sdl_backend.KeyboardStream()
     event = SDL_Event()
     running = True
@@ -47,7 +47,7 @@ def paint(t):
     glClearColor(0.8, 0.8, 0.7, 1.0)
     glClear(GL_COLOR_BUFFER_BIT)
     compositor.clear()
-    box = toplevel(page(), env, page_width=width-20, line_break=line_break)
+    box = toplevel(page(), env, dict(page_width=width-20, line_break=line_break))
     compositor.compose(box, 10, box.height + 10)
     compositor.render(0, 0, width, height)
 
@@ -59,12 +59,12 @@ def page():
         scope([
             "OpenGL rendered by test_minitex.py [~100 lines] in: ",
             "http://github.com/cheery/textended-edit/",
-        ], font_size=8),
+        ], dict(font_size=8)),
         par,
         "Hi there, We have not been properly introduced, but I already know your name. You're the ",
-        scope(["AMAZING Spiderman"], font_size=20), ". I am pleased to meet you!",
+        scope(["AMAZING Spiderman"], dict(font_size=20)), ". I am pleased to meet you!",
         par,
-        scope(["- Bonzi (Buddy) Savage"], font_size=10, color=(0.4, 0, 0, 1)),
+        scope(["- Bonzi (Buddy) Savage"], dict(font_size=10, color=(0.4, 0, 0, 1))),
         par,
         "Serious matrices: ",
         table([
@@ -81,12 +81,12 @@ def page():
         ]),
         par,
         vbox([
-            scope([par, par, "Why? What?"], font_size=20), par,
+            scope([par, par, "Why? What?"], dict(font_size=20)), par,
             "I need to display some structures in my editor. "
             "But I needed configurable layout. "
             "I designed combinators that imitate at "
             "a famous typesetting system TeX. "
-        ], font_size=11, page_width=400, text_align=line_left)
+        ], dict(font_size=11, page_width=400, text_align=line_left))
     ]
 
 if __name__=='__main__':
