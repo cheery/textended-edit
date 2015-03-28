@@ -50,6 +50,9 @@ def translate_return(env, ebox):
 def translate_import(env, *aliases):
     return Box(env.new_node(ast.Import, list(aliases)))
 
+def translate_import_from(env, name, aliases):
+    return Box(env.new_node(ast.ImportFrom, as_python_sym(name), aliases, 0))
+
 def translate_as(env, name, alias):
     return env.new_node(ast.alias, as_python_sym(name), as_python_sym(alias))
 
@@ -68,7 +71,6 @@ def translate_function(env, args, body):
     for expr in body:
         stmts.extend(env.statementify(expr))
     stmts.append(env.new_node(ast.Return, env.none()))
-    print stmts
     return Box(
         env.new_node(ast.Name, name, ast.Load()),
         [env.new_node(ast.FunctionDef,
@@ -79,8 +81,32 @@ def translate_function(env, args, body):
             stmts,
             [])])
 
-#def translate_from_import(env, name, aliases):
-#    yield env.new_node(ast.ImportFrom, as_python_sym(name), aliases, 0)
+def translate_list(env, *eboxes):
+    stmts = []
+    exprs = []
+    for ebox in eboxes:
+        stmts.extend(ebox.stmts)
+        exprs.append(ebox.expr)
+    return Box(env.new_node(ast.List, exprs, ast.Load()), stmts)
+
+def translate_tuple(env, *eboxes):
+    stmts = []
+    exprs = []
+    for ebox in eboxes:
+        stmts.extend(ebox.stmts)
+        exprs.append(ebox.expr)
+    return Box(env.new_node(ast.Tuple, exprs, ast.Load()), stmts)
+
+def translate_dict(env, *pairs):
+    stmts = []
+    keys = []
+    values = []
+    for lbox, rbox in pairs:
+        stmts.extend(lbox.stmts)
+        keys.append(lbox.expr)
+        stmts.extend(rbox.stmts)
+        values.append(rbox.expr)
+    return Box(env.new_node(ast.Dict, keys, values), stmts)
 
 def as_python_sym(name):
     return name.encode('utf-8')

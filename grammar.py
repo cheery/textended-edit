@@ -99,7 +99,7 @@ class Star(ListRule):
             return False
         if cell.label != self.label:
             return False
-        return all(self.rule.validate(c) or cell.symbol or turnip.validate(cell) for c in cell)
+        return all(self.rule.validate(c) or c.symbol or turnip.validate(c) for c in cell)
 
 class Plus(ListRule):
     def __call__(self, builder, cell):
@@ -125,7 +125,7 @@ class Plus(ListRule):
             return False
         if cell.label != self.label:
             return False
-        return all(self.rule.validate(c) or cell.symbol or turnip.validate(cell) for c in cell)
+        return all(self.rule.validate(c) or c.symbol or turnip.validate(c) for c in cell)
 
 class Context(Rule):
     def __call__(self, builder, cell):

@@ -1,5 +1,5 @@
 from dom import Cell, TextCell, ListCell
-from grammar import turnip, Star, Plus, Context
+from grammar import turnip, Star, Plus, Context, ListRule
 from position import Position
 import sys
 import traceback
@@ -31,14 +31,11 @@ def interpret(visual, keyboard):
                 for cell in visual.head.cell.hierarchy:
                     print cell.grammar,
                 print
-            elif key == unichr(167):
-                do_action(visual, start_completion)
             elif key == 'tab':
                 if 'shift' in mod:
-                    start_expansion(visual)
-                    #do_action(visual, start_expansion)
-                else:
                     do_action(visual, start_composition)
+                else:
+                    do_action(visual, start_expansion)
             elif key == 's' and 'ctrl' in mod:
                 visual.document.workspace.write(visual.document)
             elif key == 'x' and 'ctrl' in mod:
@@ -128,21 +125,45 @@ def do_action(visual, action):
         visual.action = None
         visual.continuation = None
 
-def start_completion(visual):
+def start_expansion(visual):
     head = visual.head
     assert head.cell.symbol
-    result = []
-    query = head.cell[:]
-    for rule in head.cell.grammar.rules.values():
-        if rule.label.startswith(query):
-            result.append(rule)
-    result.sort(key=lambda rule: rule.label)
-    for rule in result:
-        block = rule.blank(head.cell.grammar.name)
-        replace(head.cell, block)
-        visual.setpos(Position.top(block))
+    if head.cell.is_blank():
+        above = head.above
+        context = head.cell.context
+
+        forest = above.cell.drop(above.index, above.index+1)
+        if isinstance(context, ListRule):
+            expansion = context.blank(head.cell.grammar.name)
+        else:
+            expansion = ListCell(forest, u"@", u"")
+        above.cell.put(above.index, [expansion])
+        visual.setpos(Position.top(expansion))
         yield None
-        visual.head, visual.tail = visual.document.undo()
+    else:
+        print 'start expansion', head.cell[:]
+        result = []
+        query = head.cell[:]
+        for rule in head.cell.grammar.rules.values():
+            if rule.label.startswith(query):
+                result.append(rule)
+        result.sort(key=lambda rule: rule.label)
+        print 'results', result
+        for rule in result:
+            block = rule.blank(head.cell.grammar.name)
+            replace(head.cell, block)
+            visual.setpos(Position.top(block))
+            yield None
+            visual.head, visual.tail = visual.document.undo()
+
+#def start_expansion(visual):
+#    # slightly incorrect, should find the position where expansion is allowable.
+#    above = visual.head.above
+#    forest = above.cell.drop(above.index, above.index+1)
+#    expansion = ListCell(forest, u"@", u"")
+#    above.cell.put(above.index, [expansion])
+#    visual.setpos(Position(forest[0], visual.head.index))
+
 
 import parsing
 reload(parsing)
@@ -163,14 +184,6 @@ def start_composition(visual):
         visual.setpos(Position.bottom(new_block))
         yield None
         visual.head, visual.tail = visual.document.undo()
-
-def start_expansion(visual):
-    # slightly incorrect, should find the position where expansion is allowable.
-    above = visual.head.above
-    forest = above.cell.drop(above.index, above.index+1)
-    expansion = ListCell(forest, u"@", u"")
-    above.cell.put(above.index, [expansion])
-    visual.setpos(Position(forest[0], visual.head.index))
 
 def replace(cell, newcell):
     parent = cell.parent
