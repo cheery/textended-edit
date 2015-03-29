@@ -28,6 +28,8 @@ class Environ(object):
             env.values['text_align'] = line_justify
         if 'indent' not in values:
             env.values['indent'] = 0
+        if 'depth' not in values:
+            env.values['depth'] = 0
         return env
 
 def fold(item, env):
@@ -219,3 +221,49 @@ def table(rows, values={}):
             box.depth -= y
         yield box
     return table_fold
+
+# Primitive form of pretty printing.
+def codeline(contents):
+    def _codeline(env):
+        env = Environ.let(env, {'depth': env.depth+1})
+        if env.depth > 1:
+            for item in contents:
+                for box in fold(item, env):
+                    yield box
+        else:
+            row = []
+            for item in contents:
+                row.extend(fold(item, env))
+            boxes = list(codeline_break(env.page_width, row, 0))
+            yield vpack(boxes)
+    return _codeline
+
+def codeline_break(width, row, indent):
+    remaining = width
+    best_depth = 10000
+    for box in row:
+        remaining -= box.width
+        #if remaining < 0:
+        best_depth = min(
+            best_depth,
+            box.get_hint('break_depth', 10000))
+    if best_depth >= 10000 or remaining > 0:
+        line = hpack(row)
+        line.shift = indent
+        yield line
+    else:
+        res, shift = [], 0
+        for box in row:
+            if box.get_hint('break_depth') == best_depth:
+                for subline in codeline_break(width-shift, res, indent+shift):
+                    yield subline
+                res, shift = [], 40
+            else:
+                res.append(box)
+        for subline in codeline_break(width-shift, res, indent+shift):
+            yield subline
+
+def nl(env):
+    k = Glue(0)
+    k.hint = {'break_depth': env.depth}
+    yield k
