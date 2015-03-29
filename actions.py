@@ -104,6 +104,9 @@ def interpret(visual, keyboard):
             elif text is not None:
                 position, clipboard = collapse(visual.head, visual.tail)
                 visual.setpos(put(position, text)[1])
+            elif key == 'space':
+                position, clipboard = collapse(visual.head, visual.tail)
+                visual.setpos(put(position, " ")[1])
             else:
                 print key, mod, text
         except Exception:

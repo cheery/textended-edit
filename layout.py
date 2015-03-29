@@ -1,19 +1,54 @@
 from boxmodel import *
 from dom import TextCell, ListCell
 from minitex import *
-#from schema import Rule, Star, ListRule, modeline, modechange, blankschema, has_modeline
-#import dom
-#import importlib
-#
+import importlib
+import traceback
+import treepython
+
+class Builder(object):
+    def __init__(self):
+        self.modules = {}
+        self.errors_generated = set()
+
+    def has_layouter(self, grammar, label):
+        if grammar not in self.modules:
+            try:
+                self.modules[grammar] = importlib.import_module('repr.' + grammar)
+            except:
+                if grammar not in self.errors_generated:
+                    self.errors_generated.add(grammar)
+                    traceback.print_exc()
+                return False
+        module = self.modules[grammar]
+        return hasattr(module, 'layout_' + label)
+
+    def invoke(self, grammar, label, cell):
+        rule = grammar.rules[label]
+        return getattr(self.modules[grammar.name], 'layout_' + label)(*rule(self, cell))
+
+    def build_textcell(self, term, cell):
+        return layout_cell(cell, self)
+
+    def build_group(self, group, cell):
+        return [rule(self, subcell) for rule, subcell in zip(group, cell)]
+
+    def build_star(self, star, cell):
+        return [star.rule(self, subcell) for subcell in cell]
+
+    def build_plus(self, plus, cell):
+        return [plus.rule(self, subcell) for subcell in cell]
+
+builder = Builder()
+
 def page(document, options):
     env = Environ.root(options)
-    box = toplevel(layout_document(document), env, dict(page_width=300, indent=40))#dict(page_width=width-20, line_break=line_break))
+    box = toplevel(layout_document(document), env, dict(page_width=300, indent=40))
     return box, []
 
 def layout_document(document):
     lines = []
     for cell in document.body:
-        lines.append(layout_cell(cell))
+        lines.append(layout_cell(cell, builder))
         lines.append(brk)
     if document.body.is_external():
         lines.append(external_marker(document.body))
@@ -41,7 +76,11 @@ def notation(text):
         yield hpack(env.font(text, env.font_size, color=env.color_notation))
     return _fold
 
-def layout_cell(cell):
+def layout_cell(cell, builder):
+    if len(cell.label) > 0 and cell.rule is not None:
+        grammar = cell.grammar
+        if builder.has_layouter(grammar.name, cell.label):
+            return builder.invoke(grammar, cell.label, cell)
     if isinstance(cell, TextCell):
         if cell.is_blank() and cell.symbol:
             return blank_marker(cell)
@@ -59,42 +98,11 @@ def layout_cell(cell):
     for subcell in cell:
         if spac:
             row.append(" ")
-        row.append(layout_cell(subcell))
+        row.append(layout_cell(subcell, builder))
         spac = True
     row.append(notation("]"))
     return scope(row)
-#def layout_cell(cell, options):
-#    if isinstance(cell, TextCell):
-#        if cell.is_blank() and cell.symbol:
-#            return hpack(plain("_", options, 'color_empty')).set_subj(cell, 0)
-#        if cell.symbol:
-#            return hpack(plain(cell, options))
-#    if cell.is_external():
-#        return hpack(plain("._.", options, 'color_empty')).set_subj(cell, 0)
-#    boxes = []
-#    boxes.extend(plain("[", options, 'color_notation'))
-#    boxes.extend(plain(cell.label, options, 'color_notation' if cell.rule else 'color_notation_error'))
-#    for subcell in cell:
-#        boxes.extend(plain(" ", options, 'color_notation'))
-#        boxes.append(layout_cell(subcell, options))
-#    boxes.extend(plain("]", options, 'color_notation'))
-#    return hpack(boxes)
-#
-#def plain(cell, options, color='white'):
-#    return options['font'](cell, options['font_size'], color=options[color])
 
-
-#def page(workspace, env, subj):
-#    context = Object(workspace=workspace, env=env, outboxes=[], schema=blankschema, layout=None)
-#    tokens = []
-#    if has_modeline(subj):
-#        configure_schema(context, subj[0])
-#    for node in subj:
-#        tokens.extend(layout_element(context, node))
-#        tokens.append(separator(context.env))
-#    tokens.extend(sentinel(context.env, subj))
-#    return packlines(tokens, env.width), context.outboxes
-#
 #def configure_schema(context, modeline):
 #    schema_name = modeline[0][:]
 #    if schema_name == '':
