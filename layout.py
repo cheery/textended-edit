@@ -20,11 +20,11 @@ class Builder(object):
                     traceback.print_exc()
                 return False
         module = self.modules[grammar]
-        return hasattr(module, 'layout_' + label)
+        return hasattr(module, 'layout_' + label.replace('-', '_'))
 
     def invoke(self, grammar, label, cell):
         rule = grammar.rules[label]
-        return getattr(self.modules[grammar.name], 'layout_' + label)(*rule(self, cell))
+        return getattr(self.modules[grammar.name], 'layout_' + label.replace('-', '_'))(*rule(self, cell))
 
     def build_textcell(self, term, cell):
         return layout_cell(cell, self)
@@ -37,6 +37,9 @@ class Builder(object):
 
     def build_plus(self, plus, cell):
         return [plus.rule(self, subcell) for subcell in cell]
+
+    def build_context(self, ctx, cell):
+        return layout_cell(cell, self)
 
 builder = Builder()
 

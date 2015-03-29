@@ -257,7 +257,7 @@ def codeline_break(width, row, indent):
             if box.get_hint('break_depth') == best_depth:
                 for subline in codeline_break(width-shift, res, indent+shift):
                     yield subline
-                res, shift = [], 40
+                res, shift = [], 20
             else:
                 res.append(box)
         for subline in codeline_break(width-shift, res, indent+shift):
