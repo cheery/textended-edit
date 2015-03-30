@@ -1,3 +1,7 @@
+# Many smaller images are thrown into atlas
+# before rendering them. This module implements
+# allocation into the atlas.
+
 class Item(object):
     def __init__(self, width, height, source):
         self.x = 0

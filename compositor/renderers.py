@@ -1,3 +1,6 @@
+# Bit like in image manipulation program, the screen output
+# consists of layers. We've got various different layers that
+# are filled up by the compositor.
 from OpenGL.GL import *
 from OpenGL.GL import shaders
 from ctypes import POINTER, cast, c_char, c_void_p, byref
@@ -17,7 +20,16 @@ class ImageLayer(object):
         glBindTexture(GL_TEXTURE_2D, self.texture)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self.width, self.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, c_void_p(0))
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA,
+            self.width,
+            self.height,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            c_void_p(0))
 
         self.vertexshader = shaders.compileShader("""
         attribute vec2 position;
@@ -44,7 +56,9 @@ class ImageLayer(object):
         void main() {
             gl_FragColor = v_color * texture2D(texture, v_texcoord);
         }""", GL_FRAGMENT_SHADER)
-        self.shader = shaders.compileProgram(self.vertexshader, self.fragmentshader)
+        self.shader = shaders.compileProgram(
+            self.vertexshader,
+            self.fragmentshader)
 
         self.vbo = glGenBuffers(1)
         self.vertices = []
@@ -74,7 +88,10 @@ class ImageLayer(object):
         self.vertex(x1, y1, s1, t1, r, g, b, a)
         self.vertex(x1, y0, s1, t0, r, g, b, a)
 
-    def patch9(self, (x0, y0, x3, y3), (s0, t0, s1, t1, s2, t2, s3, t3), color):
+    def patch9(self,
+            (x0, y0, x3, y3),
+            (s0, t0, s1, t1, s2, t2, s3, t3),
+            color):
         if x3 < x0:
             x0, x3 = x3, x0
         if y3 < y0:
@@ -105,8 +122,10 @@ class ImageLayer(object):
         width = image.contents.w
         height = image.contents.h
         pixels = cast(c_void_p(image.contents.pixels), POINTER(c_char))
-        x_stripe = [i for i in range(1, width) if pixels[i*4] == '\x00']
-        y_stripe = [i for i in range(1, height) if pixels[i*4*width] == '\x00']
+        x_stripe = [i for i in range(1, width)
+            if pixels[i*4] == '\x00']
+        y_stripe = [i for i in range(1, height)
+            if pixels[i*4*width] == '\x00']
         s1 = s0 + float(x_stripe[0])  / self.width
         s2 = s0 + float(x_stripe[-1]) / self.width
         t1 = t0 + float(y_stripe[0]) / self.height
@@ -115,7 +134,6 @@ class ImageLayer(object):
         t0 += 1.0 / self.height
         self.patch9_metrics[path] = tx = s0, t0, s1, t1, s2, t2, s3, t3
         return tx
-
 
     def texcoords(self, path):
         if path in self.subtextures:
@@ -147,7 +165,16 @@ class ImageLayer(object):
                 data = '\xff'*(4*8*8)
             else:
                 data = c_void_p(area.source.contents.pixels)
-            glTexSubImage2D(GL_TEXTURE_2D, 0, area.x, area.y, area.width, area.height, GL_RGBA, GL_UNSIGNED_BYTE, data)
+            glTexSubImage2D(
+                GL_TEXTURE_2D,
+                0,
+                area.x,
+                area.y,
+                area.width,
+                area.height,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                data)
         self.allocator.dirty[:] = ()
 
         glUseProgram(self.shader)
@@ -168,20 +195,21 @@ class ImageLayer(object):
         a_color = glGetAttribLocation(self.shader, "color")
 
         glEnableVertexAttribArray(a_position)
-        glVertexAttribPointer(a_position, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(0))
+        glVertexAttribPointer(
+            a_position, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(0))
 
         glEnableVertexAttribArray(a_texcoord)
-        glVertexAttribPointer(a_texcoord, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*2))
+        glVertexAttribPointer(
+            a_texcoord, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*2))
 
         glEnableVertexAttribArray(a_color)
-        glVertexAttribPointer(a_color, 4, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*4))
+        glVertexAttribPointer(
+            a_color, 4, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*4))
 
         glDrawArrays(GL_QUADS, 0, self.vertexcount)
         glDisableVertexAttribArray(a_position)
         glDisableVertexAttribArray(a_texcoord)
         glDisableVertexAttribArray(a_color)
-
-
 
 class FontLayer(object):
     def __init__(self, images, font):
@@ -196,7 +224,16 @@ class FontLayer(object):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         ptr = c_void_p(image.contents.pixels)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.contents.w, image.contents.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptr)
+        glTexImage2D(
+            GL_TEXTURE_2D,
+            0,
+            GL_RGBA,
+            image.contents.w,
+            image.contents.h,
+            0,
+            GL_RGBA,
+            GL_UNSIGNED_BYTE,
+            ptr)
         self.texture = texture
 
         self.vertexshader = shaders.compileShader("""
@@ -229,7 +266,9 @@ class FontLayer(object):
             float alpha = smoothstep(0.5 - smoothing*deriv, 0.5 + smoothing*deriv, distance);
             gl_FragColor = vec4(v_color.rgb, v_color.a*alpha);
         }""", GL_FRAGMENT_SHADER)
-        self.shader = shaders.compileProgram(self.vertexshader, self.fragmentshader)
+        self.shader = shaders.compileProgram(
+            self.vertexshader,
+            self.fragmentshader)
 
         self.vbo = glGenBuffers(1)
         self.vertices = []
@@ -286,13 +325,16 @@ class FontLayer(object):
         a_color = glGetAttribLocation(self.shader, "color")
 
         glEnableVertexAttribArray(a_position)
-        glVertexAttribPointer(a_position, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(0))
+        glVertexAttribPointer(
+            a_position, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(0))
 
         glEnableVertexAttribArray(a_texcoord)
-        glVertexAttribPointer(a_texcoord, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*2))
+        glVertexAttribPointer(
+            a_texcoord, 2, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*2))
 
         glEnableVertexAttribArray(a_color)
-        glVertexAttribPointer(a_color, 4, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*4))
+        glVertexAttribPointer(
+            a_color, 4, GL_FLOAT, GL_FALSE, 4*8, c_void_p(4*4))
 
         glDrawArrays(GL_QUADS, 0, self.vertexcount)
         glDisableVertexAttribArray(a_position)
@@ -320,7 +362,9 @@ class FlatLayer(object):
         void main() {
             gl_FragColor = v_color;
         }""", GL_FRAGMENT_SHADER)
-        self.shader = shaders.compileProgram(self.vertexshader, self.fragmentshader)
+        self.shader = shaders.compileProgram(
+            self.vertexshader,
+            self.fragmentshader)
         self.vbo = glGenBuffers(1)
         self.vertices = []
         self.vertexcount = 0
@@ -370,10 +414,12 @@ class FlatLayer(object):
         a_color = glGetAttribLocation(self.shader, "color")
 
         glEnableVertexAttribArray(a_position)
-        glVertexAttribPointer(a_position, 2, GL_FLOAT, GL_FALSE, stride, c_void_p(0))
+        glVertexAttribPointer(
+            a_position, 2, GL_FLOAT, GL_FALSE, stride, c_void_p(0))
 
         glEnableVertexAttribArray(a_color)
-        glVertexAttribPointer(a_color, 4, GL_FLOAT, GL_FALSE, stride, c_void_p(4*2))
+        glVertexAttribPointer(
+            a_color, 4, GL_FLOAT, GL_FALSE, stride, c_void_p(4*2))
 
         glDrawArrays(GL_QUADS, 0, self.vertexcount)
         glDisableVertexAttribArray(a_position)
