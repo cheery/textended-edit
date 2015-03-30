@@ -1,3 +1,4 @@
+# Holds everything SDL I don't want to see elsewhere.
 from sdl2 import *
 from sdl2.sdlimage import *
 from ctypes import c_int, byref
@@ -21,6 +22,9 @@ modifiers = {
     KMOD_GUI:   'gui',
 }
 
+# SDL keyboard handling sucks beyond recognition. This thing
+# reassociates keyboard events with textinput events so it
+# could be suppressed when responding to key macros.
 class KeyboardStream(object):
     def __init__(self):
         self.name = None
@@ -43,7 +47,9 @@ class KeyboardStream(object):
             mod = ev.key.keysym.mod
             self.flush()
             self.name = SDL_GetKeyName(sym).decode('utf-8').lower()
-            self.mods = set(name for flag, name in modifiers.items() if mod & flag != 0)
+            self.mods = set(
+                name for flag, name in modifiers.items()
+                if mod & flag != 0)
             self.text = None
 
     def __iter__(self):
@@ -52,6 +58,8 @@ class KeyboardStream(object):
             yield key
         self.pending[:] = ()
 
+# Many image paths are relative to the file where it appears.
+# The path is resolved before it ends up here.
 class ImageResources(object):
     def __init__(self):
         self.cache = {}
@@ -67,6 +75,8 @@ class ImageResources(object):
             image = self.cache.pop(path)
             SDL_FreeSurface(image)
 
+# These remaining functions are mostly specialization to my
+# use case. All this detail would be just dumb noise in edit.py
 class Screen(object):
     def __init__(self, name, width, height):
         SDL_Init(SDL_INIT_VIDEO)
@@ -77,7 +87,9 @@ class Screen(object):
             SDL_WINDOWPOS_CENTERED,
             width,
             height,
-            SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE)
+            (SDL_WINDOW_SHOWN |
+                SDL_WINDOW_OPENGL |
+                SDL_WINDOW_RESIZABLE))
         self.context = SDL_GL_CreateContext(self.window)
         SDL_StartTextInput()
 
