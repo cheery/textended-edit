@@ -1,6 +1,6 @@
 from dom import Cell, TextCell, ListCell
-from grammar import turnip, Star, Plus, Context, ListRule
-from position import Position
+from dom.grammar import turnip, Star, Plus, Context, ListRule
+from dom.position import Position
 import sys
 import traceback
 
@@ -176,10 +176,14 @@ def start_composition(visual):
         cell = cell.parent
         if cell is None:
             raise Exception("not implemented")
-    context = cell.context
-    assert context
+    context = cell.parent.rule.at(cell.parent.index(cell))
+    if isinstance(context, Context):
+        rules = context.rules
+    else:
+        assert context
+        rules = [context]
     # My attempt to create 'best result first' parser grand failed.
-    results = list(parsing.parse([c.copy() for c in cell], context.rules, timeout=0.1))
+    results = list(parsing.parse([c.copy() for c in cell], rules, timeout=0.5))
     results.sort(key=lambda x: x.badness)
     for result in results:
         new_block = result.wrap()

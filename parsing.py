@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dom import TextCell, ListCell
-from grammar import *
+from dom.grammar import *
 from Queue import PriorityQueue
 from time import time
 
@@ -9,8 +9,7 @@ from time import time
 # succeed, giving an insanely bad initial answer.
 
 class Reduction(object): # Reduction represents found ListRules.
-    def __init__(self, grammar, rule, values, badness):
-        self.grammar = grammar
+    def __init__(self, rule, values, badness):
         self.rule = rule
         self.values = values
         self.badness = 50 # Would fill up from the operator-assigned badness.
@@ -45,7 +44,7 @@ class Reduction(object): # Reduction represents found ListRules.
                 result.append(item.wrap())
             else:
                 result.append(item.copy())
-        return ListCell(result, self.rule.label, self.grammar.name)
+        return ListCell(result, self.rule.label, self.rule.grammar.name)
 
 # Parsing results with incorrect precedences aren't suppressed, instead they're
 # penalized harshly.

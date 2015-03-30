@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 #from grammar import Context, ListRule
-from grammar import symbol, string
+from dom.grammar import symbol, string
+from dom import metagrammar
 from itertools import count
 import ast
 import dom
 import imp
-import metagrammar
 import os
 import sys
 import translator

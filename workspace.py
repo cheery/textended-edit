@@ -1,6 +1,6 @@
-from grammar import *
+from dom.grammar import *
+from dom import metagrammar
 import dom
-import metagrammar
 import sys, os
 
 class Workspace(object):

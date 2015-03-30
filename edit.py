@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-from boxmodel import hpack
+from minitex.boxmodel import hpack
 from compositor import Compositor
 from ctypes import byref
 from OpenGL.GL import *
-from position import Position
+from dom.position import Position
 from sdl2 import *
 from workspace import Workspace
+from minitex import font
 import actions
-import font
 import layout
 import sdlut
 import sys
@@ -115,7 +115,7 @@ def init():
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         640, 480, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE)
     context = SDL_GL_CreateContext(window)
-    images = sdl_backend.ImageResources()
+    images = sdlut.ImageResources()
     SDL_StartTextInput()
 
     glEnable(GL_BLEND)
@@ -123,7 +123,7 @@ def init():
 
     options = dict(
         background=(0x27/255.0, 0x28/255.0, 0x22/255.0, 1),
-        font=font.load("OpenSans.fnt"),
+        font=font.load("assets/OpenSans.fnt"),
         font_size=12,
         page_width=320,
         color=(1, 1, 1, 1),
@@ -132,13 +132,14 @@ def init():
         color_notation=(1.0, 1.0, 1.0, 0.2),
         color_notation_error=(1.0, 0.5, 0.5, 0.2),
         color_empty=(1.0, 1.0, 1.0, 0.5),
+        color_external=(1.0, 1.0, 1.0, 0.1),
         )
     workspace = Workspace()
     document = workspace.get(sys.argv[1])
     visual = Visual(images, document, options)
 
 def main(respond):
-    keyboard = sdl_backend.KeyboardStream()
+    keyboard = sdlut.KeyboardStream()
     event = SDL_Event()
     running = True
     while running:
@@ -166,7 +167,7 @@ def main(respond):
         SDL_GL_SwapWindow(window)
 
 def paint(t):
-    width, height = sdl_backend.get_window_size(window)
+    width, height = sdlut.get_window_size(window)
     glViewport(0, 0, width, height)
     visual.render(visual.scroll_x, visual.scroll_y, width, height)
 

@@ -1,4 +1,4 @@
-from boxmodel import *
+from minitex.boxmodel import *
 from dom import TextCell, ListCell
 from minitex import *
 import importlib
@@ -33,9 +33,13 @@ class Builder(object):
         return [rule(self, subcell) for rule, subcell in zip(group, cell)]
 
     def build_star(self, star, cell):
+        if cell.is_external():
+            return [external_marker(cell)]
         return [star.rule(self, subcell) for subcell in cell]
 
     def build_plus(self, plus, cell):
+        if cell.is_external():
+            return [external_marker(cell)]
         return [plus.rule(self, subcell) for subcell in cell]
 
     def build_context(self, ctx, cell):
@@ -59,7 +63,7 @@ def layout_document(document):
                 
 def external_marker(cell):
     def _fold(env):
-        yield hpack(env.font("._.", env.font_size, color=env.color_empty)).set_subj(cell, 0)
+        yield hpack(env.font("_", env.font_size, color=env.color_external)).set_subj(cell, 0)
     return _fold
 
 def blank_marker(cell):
