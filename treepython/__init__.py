@@ -8,7 +8,7 @@ import imp
 import metagrammar
 import os
 import sys
-import treepython_translator
+import translator
 
 grammar = metagrammar.load(dom.load("grammars/treepython.t+"), 'treepython')
 
@@ -107,7 +107,7 @@ class Env(object):
         return node
 
     def statementify(self, box):
-        assert isinstance(box, treepython_translator.Box)
+        assert isinstance(box, translator.Box)
         for stmt in box.stmts:
             yield stmt
         yield box.expr
@@ -158,7 +158,7 @@ class MetaImporter(object):
             return MetaLoader(path, ispkg)
 
 def get_translator(name):
-    return getattr(treepython_translator, "translate_" + name.replace('-', '_'))
+    return getattr(translator, "translate_" + name.replace('-', '_'))
 
 def ident_to_lineno(ident):
     lineno = 0

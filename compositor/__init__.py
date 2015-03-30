@@ -1,4 +1,4 @@
-import boxmodel
+from minitex import boxmodel
 import renderers
 
 class Compositor(object):

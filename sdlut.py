@@ -1,6 +1,7 @@
 from sdl2 import *
 from sdl2.sdlimage import *
 from ctypes import c_int, byref
+import os
 
 modifiers = {
     KMOD_LSHIFT:  'left shift',
@@ -66,8 +67,38 @@ class ImageResources(object):
             image = self.cache.pop(path)
             SDL_FreeSurface(image)
 
+class Screen(object):
+    def __init__(self, name, width, height):
+        SDL_Init(SDL_INIT_VIDEO)
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)
+        self.window = SDL_CreateWindow(
+            name.encode('utf-8'),
+            SDL_WINDOWPOS_CENTERED,
+            SDL_WINDOWPOS_CENTERED,
+            width,
+            height,
+            SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE)
+        self.context = SDL_GL_CreateContext(self.window)
+        SDL_StartTextInput()
+
+    @property
+    def width(self):
+        return get_window_size(self.window)[0]
+
+    @property
+    def height(self):
+        return get_window_size(self.window)[1]
+
+    def swap(self):
+        SDL_GL_SwapWindow(self.window)
+
 def get_window_size(window):
     width = c_int()
     height = c_int()
     SDL_GetWindowSize(window, byref(width), byref(height))
     return width.value, height.value
+
+def poll_events():
+    event = SDL_Event()
+    while SDL_PollEvent(byref(event)) != 0:
+        yield event

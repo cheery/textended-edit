@@ -9,7 +9,7 @@ from workspace import Workspace
 import actions
 import font
 import layout
-import sdl_backend
+import sdlut
 import sys
 import time
 import traceback

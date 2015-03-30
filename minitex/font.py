@@ -11,7 +11,7 @@ def load(path):
     page = re.search(r'^page .*file="([^"]*)"', fontspec, re.M)
 
     font = Font()
-    font.filename = page.group(1)
+    font.filename = os.path.join(dirname, page.group(1))
     font.size, p0, p1, p2, p3 = map(int, info.groups())
     font.line_height, font.base, font.width, font.height = map(int, common.groups())
     font.padding = p0, p1, p2, p3
