@@ -1,5 +1,7 @@
 # Structure Editor, for .t+ -files.
 
+I've stopped working on this project for now. The problem I found hard to solve is parsing the user input into structures without ending up with limitations of just parsing it all in the first place.
+
 If you decide to try it, make sure you've got pysdl2, pysdl2 image, pyopengl and textended. I've tried it with python 2.7
 
 On ubuntu the dependencies can be satisfied with:
@@ -35,6 +37,8 @@ Related blog posts:
 There's an IRC channel #essence in irc.freenode.net, for those who like to discuss about visual programming/structured editing.
 
 ## Screenshots
+
+The screenshots are old, but current version has similar functionality.
 
 Here's a screenshot from `samples/clearscreen.t+`, first with default layouting...
 
